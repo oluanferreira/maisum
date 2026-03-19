@@ -64,9 +64,9 @@
 | 3.1 | Home Screen with Map | InProgress | Epic 3 |
 | 3.2 | Restaurant List & Filters | InProgress | Epic 3 |
 | 3.3 | Restaurant Detail Page | InProgress | Epic 3 |
-| 4.1 | AbacatePay Integration & Webhook Setup | Draft | Epic 4 |
-| 4.2 | Subscription Plans & Payment Flow | Draft | Epic 4 |
-| 4.3 | Coupon Allocation & Subscription Management | Draft | Epic 4 |
+| 4.1 | AbacatePay Integration & Webhook Setup | InProgress | Epic 4 |
+| 4.2 | Subscription Plans & Payment Flow | InProgress | Epic 4 |
+| 4.3 | Coupon Allocation & Subscription Management | InProgress | Epic 4 |
 | 5.1 | QR Code Generation & Display | Draft | Epic 5 |
 | 5.2 | QR Code Validation (Restaurant Side) | Draft | Epic 5 |
 | 5.3 | Coupon History & Status Tracking | Draft | Epic 5 |
@@ -81,9 +81,27 @@
 | 7.5 | Admin Dashboard & Metrics | Draft | Epic 7 |
 | 7.6 | City Management | Draft | Epic 7 |
 
-**Totais:** 29 stories (26 Draft, 3 InProgress, 0 Done)
+**Totais:** 29 stories (23 Draft, 6 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
+
+### Sessao 2026-03-19 — Stories 4.1, 4.2, 4.3 Implementation
+
+**Story 4.1 — AbacatePay Integration & Webhook Setup** (InProgress):
+- Edge Function `handle-payment-webhook` criada com verificacao HMAC, handlers para subscription.paid/cancelled/failed, logging de eventos, allocate_coupons RPC call, push placeholder
+- Arquivos: `supabase/functions/handle-payment-webhook/index.ts`
+
+**Story 4.2 — Subscription Plans & Payment Flow** (InProgress):
+- Tela de selecao de planos completa: card Anual (R$89,90, 100 cupons, badge "Melhor Valor", "Economize 45%") e card Mensal (R$14,90, 10 cupons)
+- Design tokens aplicados: Primary #FF6B35, Accent #FFCB47, Success #22C55E
+- Placeholder para checkout AbacatePay (Alert informativo enquanto API key nao esta configurada)
+- Arquivos: `apps/mobile/app/plans.tsx`
+
+**Story 4.3 — Coupon Allocation & Subscription Management** (InProgress):
+- Tela de gerenciamento de assinatura completa: plan badge, info card (renovacao + cupons disponiveis), historico de pagamentos (ultimos 5), botao cancelar com confirmacao via Alert
+- Edge Function `expire-coupons` criada: expira cupons vencidos + subscriptions canceladas apos periodo, combina ambas operacoes no mesmo cron
+- Estados: loading, error, sem assinatura (redirect para /plans), assinatura ativa, assinatura cancelada
+- Arquivos: `apps/mobile/app/(tabs)/profile/subscription.tsx`, `supabase/functions/expire-coupons/index.ts`
 
 ### Sessao 2026-03-19 — Stories 3.1, 3.2, 3.3 Implementation
 
