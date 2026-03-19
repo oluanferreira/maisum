@@ -1,0 +1,48 @@
+
+
+# Environment & Secrets (LMAS)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Dependencies (LMAS)
+node_modules/
+node_modules
+
+# Build & Logs (LMAS)
+dist/
+build/
+*.log
+logs/
+
+# Turbo
+.turbo/
+
+# Next.js
+.next/
+
+# Expo
+.expo/
+android/
+ios/
+web-build/
+
+# Testing
+coverage/
+
+# Supabase
+supabase/.temp/
+
+# IDE & OS (LMAS)
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# LMAS Local (LMAS)
+.lmas-core/local/
+.claude/settings.local.json
+.lmas/install-log.txt
