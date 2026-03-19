@@ -61,9 +61,9 @@
 | 2.2 | Restaurant Invite Link & Self-Registration | Draft | Epic 2 |
 | 2.3 | Restaurant Profile Management | Draft | Epic 2 |
 | 2.4 | Benefit Configuration | Draft | Epic 2 |
-| 3.1 | Home Screen with Map | Draft | Epic 3 |
-| 3.2 | Restaurant List & Filters | Draft | Epic 3 |
-| 3.3 | Restaurant Detail Page | Draft | Epic 3 |
+| 3.1 | Home Screen with Map | InProgress | Epic 3 |
+| 3.2 | Restaurant List & Filters | InProgress | Epic 3 |
+| 3.3 | Restaurant Detail Page | InProgress | Epic 3 |
 | 4.1 | AbacatePay Integration & Webhook Setup | Draft | Epic 4 |
 | 4.2 | Subscription Plans & Payment Flow | Draft | Epic 4 |
 | 4.3 | Coupon Allocation & Subscription Management | Draft | Epic 4 |
@@ -81,9 +81,30 @@
 | 7.5 | Admin Dashboard & Metrics | Draft | Epic 7 |
 | 7.6 | City Management | Draft | Epic 7 |
 
-**Totais:** 29 stories (29 Draft, 0 InProgress, 0 Done)
+**Totais:** 29 stories (26 Draft, 3 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
+
+### Sessao 2026-03-19 — Stories 3.1, 3.2, 3.3 Implementation
+
+**Story 3.1 — Home Screen with Map** (InProgress):
+- Home screen com top bar (cidade + icones), map placeholder, lista de restaurantes do Supabase
+- Cards com nome, cuisine_type, cidade, rating placeholder, badge disponibilidade
+- Pull-to-refresh, navegacao para /restaurant/[id]
+- Arquivos: `apps/mobile/app/(tabs)/index.tsx`
+
+**Story 3.2 — Restaurant List & Filters** (InProgress):
+- SearchBar molecule (pill shape, TextInput) e FilterChips molecule (horizontal scroll, toggle chips)
+- Busca por nome, filtro por cuisine_type, sort labels, skeleton loading, empty state
+- Arquivos: `apps/mobile/components/molecules/search-bar.tsx`, `apps/mobile/components/molecules/filter-chips.tsx`, `apps/mobile/app/(tabs)/index.tsx`
+
+**Story 3.3 — Restaurant Detail Page** (InProgress):
+- Tela completa: header com foto placeholder, nome, rating calculado, availability badge
+- Secao beneficio +um com card FFF1EB, regras de horario, calculo isBenefitAvailableNow
+- Secao sobre (descricao, endereco, telefone tap-to-call, mini mapa placeholder)
+- Secao avaliacoes (ultimas 5, estrelas, comentario, data)
+- Bottom CTA fixo: "Usar Cupom" (FF6B35) + botao chat
+- Arquivos: `apps/mobile/app/restaurant/[id].tsx`
 
 ### Sessao 2026-03-19 — Phase 2 Sharding Completo
 
