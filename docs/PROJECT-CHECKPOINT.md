@@ -70,10 +70,10 @@
 | 5.1 | QR Code Generation & Display | InProgress | Epic 5 |
 | 5.2 | QR Code Validation (Restaurant Side) | InProgress | Epic 5 |
 | 5.3 | Coupon History & Status Tracking | InProgress | Epic 5 |
-| 6.1 | Real-time Chat Infrastructure | Draft | Epic 6 |
-| 6.2 | Chat UI (Client App) | Draft | Epic 6 |
-| 6.3 | Chat UI (Restaurant Panel) | Draft | Epic 6 |
-| 6.4 | Push Notifications System | Draft | Epic 6 |
+| 6.1 | Real-time Chat Infrastructure | InProgress | Epic 6 |
+| 6.2 | Chat UI (Client App) | InProgress | Epic 6 |
+| 6.3 | Chat UI (Restaurant Panel) | InProgress | Epic 6 |
+| 6.4 | Push Notifications System | InProgress | Epic 6 |
 | 7.1 | Review System | Draft | Epic 7 |
 | 7.2 | Refer-a-Friend (Indica e Ganha) | Draft | Epic 7 |
 | 7.3 | Social Media Post Bonus | Draft | Epic 7 |
@@ -81,9 +81,33 @@
 | 7.5 | Admin Dashboard & Metrics | Draft | Epic 7 |
 | 7.6 | City Management | Draft | Epic 7 |
 
-**Totais:** 29 stories (20 Draft, 9 InProgress, 0 Done)
+**Totais:** 29 stories (16 Draft, 13 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
+
+### Sessao 2026-03-19 — Stories 6.1-6.4 Implementation
+
+**Story 6.1 — Chat Infrastructure** (InProgress):
+- Edge Function `send-push` criada: recebe user_id/title/body/data, busca push_tokens, envia via Expo Push API em batches de 100, remove tokens invalidos (DeviceNotRegistered), retorna success/failure count
+- Tabelas conversations/messages ja existem da migration 1.2
+- Arquivos: `supabase/functions/send-push/index.ts`
+
+**Story 6.2 — Chat UI (Client App)** (InProgress):
+- Lista de conversas: avatar restaurante (foto ou placeholder letra), nome, preview 50 chars, time ago, badge nao lidas, pull-to-refresh, empty state
+- Tela conversa individual: header com nome restaurante + back, FlatList de mensagens, bolhas sent (#FF6B35 branco, borderRadius flat bottom-right) e received (#F3F4F6 escuro, flat bottom-left), timestamp, input bar + botao enviar, optimistic update, mark as read, realtime subscription placeholder comentado
+- Arquivos: `apps/mobile/app/(tabs)/chat/index.tsx`, `apps/mobile/app/(tabs)/chat/[id].tsx`
+
+**Story 6.3 — Chat UI (Restaurant Panel)** (InProgress):
+- Split layout: sidebar 320px com lista conversas + area mensagens flex-1
+- Filtros: Todas | Nao respondidas (sender_role=user na ultima msg)
+- Cards: avatar cliente, nome, preview, time ago, unread badge, destaque conversa ativa
+- Mensagens: bolhas restaurante (direita, orange-500) e cliente (esquerda, white border), timestamps, auto-scroll
+- Input: textarea com Enter para enviar (Shift+Enter nova linha), optimistic update, sender_role=restaurant_admin
+- Arquivos: `apps/restaurant-web/src/app/(dashboard)/chat/page.tsx`
+
+**Story 6.4 — Push Notifications** (InProgress):
+- Tela admin push: formulario titulo (50 chars) + mensagem (200 chars), segmentacao radio (todos usuarios / usuarios cidade / assinantes ativos), dropdown cidade condicional, alcance estimado (query count), botao Enviar com confirmacao, historico placeholder
+- Arquivos: `apps/admin-web/src/app/(dashboard)/notifications/page.tsx`
 
 ### Sessao 2026-03-19 — Stories 5.1, 5.2, 5.3 Implementation
 
