@@ -28,6 +28,13 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b835eb99-de01-4ad3-97f7-bab7ecb3982e"
+      }
+    },
+    "owner": "oluanferreira"
   }
 }
