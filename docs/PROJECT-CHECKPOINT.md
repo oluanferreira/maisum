@@ -74,16 +74,44 @@
 | 6.2 | Chat UI (Client App) | InProgress | Epic 6 |
 | 6.3 | Chat UI (Restaurant Panel) | InProgress | Epic 6 |
 | 6.4 | Push Notifications System | InProgress | Epic 6 |
-| 7.1 | Review System | Draft | Epic 7 |
-| 7.2 | Refer-a-Friend (Indica e Ganha) | Draft | Epic 7 |
-| 7.3 | Social Media Post Bonus | Draft | Epic 7 |
-| 7.4 | Restaurant Dashboard & Metrics | Draft | Epic 7 |
-| 7.5 | Admin Dashboard & Metrics | Draft | Epic 7 |
-| 7.6 | City Management | Draft | Epic 7 |
+| 7.1 | Review System | InProgress | Epic 7 |
+| 7.2 | Refer-a-Friend (Indica e Ganha) | InProgress | Epic 7 |
+| 7.3 | Social Media Post Bonus | InProgress | Epic 7 |
+| 7.4 | Restaurant Dashboard & Metrics | InProgress | Epic 7 |
+| 7.5 | Admin Dashboard & Metrics | InProgress | Epic 7 |
+| 7.6 | City Management | InProgress | Epic 7 |
 
-**Totais:** 29 stories (16 Draft, 13 InProgress, 0 Done)
+**Totais:** 29 stories (10 Draft, 19 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
+
+### Sessao 2026-03-19 — Stories 7.1-7.6 Implementation
+
+**Story 7.1 — Review System** (InProgress):
+- Tela de avaliacao completa: 5 estrelas 40px (#FFCB47 filled / #E5E7EB empty), campo comentario opcional multiline, CTA "Enviar e ganhar +1 cupom" (#FF6B35), link "Avaliar depois", insert reviews + RPC grant_extra_coupons, tela sucesso com check animation
+- Arquivos: `apps/mobile/app/review/[restaurantId].tsx`
+
+**Story 7.2 — Refer-a-Friend** (InProgress):
+- Tela Indica e Ganha completa: carrega referral_code do perfil, card com link maisumapp.com/ref/{code} + botao copiar, compartilhar via WhatsApp (Linking.openURL) e Share.share generico, historico de indicacoes (FlatList com nome/status badge Pendente amarelo + Convertido verde/data/+3 cupons badge), stats cards (convidados/convertidos/cupons ganhos)
+- Arquivos: `apps/mobile/app/(tabs)/profile/referral.tsx`
+
+**Story 7.3 — Social Media Post Bonus** (InProgress):
+- Componente SocialSharePrompt: header "Compartilhe e ganhe +1 cupom!", share text pre-preenchido com @maisumapp, botao compartilhar via Share.share, input link de prova + submit para social_proofs, botao Pular
+- Admin social-proofs page: tabela com filtro tabs (Pendentes/Aprovadas/Rejeitadas/Todas), colunas cliente/restaurante/tipo/prova/data/status, botoes aprovar/rejeitar
+- Restaurant social-proofs page: mesma funcionalidade filtrada por restaurante
+- Arquivos: `apps/mobile/components/organisms/social-share-prompt.tsx`, `apps/admin-web/src/app/(dashboard)/social-proofs/page.tsx`, `apps/restaurant-web/src/app/(dashboard)/social-proofs/page.tsx`
+
+**Story 7.4 — Restaurant Dashboard** (InProgress):
+- Dashboard completo: seletor periodo (7d/30d/90d), 4 metric cards coloridos (Cupons Validados orange, Clientes Unicos teal, Nota Media yellow, Total Avaliacoes blue), chart cupons por dia (barras horizontais CSS), ranking top 10 beneficios resgatados, query via supabase.rpc get_restaurant_metrics
+- Arquivos: `apps/restaurant-web/src/app/(dashboard)/page.tsx`
+
+**Story 7.5 — Admin Dashboard** (InProgress):
+- Dashboard completo: 6 metric cards (Total Usuarios blue, Assinantes green, MRR emerald formato R$, Cupons Resgatados orange, Restaurantes purple, Churn Rate red formato %), chart placeholders para Recharts, secao indicacoes (total + taxa conversao), tabela top 5 restaurantes, filtro por cidade dropdown
+- Arquivos: `apps/admin-web/src/app/(dashboard)/page.tsx`
+
+**Story 7.6 — City Management** (InProgress):
+- Pagina CRUD cidades completa: tabela com nome/estado/restaurantes count/status badge (Ativa verde / Inativa cinza)/acoes, formulario inline nova cidade (nome + select UF com 27 estados brasileiros), toggle ativar/desativar com confirmacao antes de desativar, contagem de restaurantes por cidade
+- Arquivos: `apps/admin-web/src/app/(dashboard)/cities/page.tsx`
 
 ### Sessao 2026-03-19 — Stories 6.1-6.4 Implementation
 
