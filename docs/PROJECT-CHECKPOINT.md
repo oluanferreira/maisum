@@ -67,9 +67,9 @@
 | 4.1 | AbacatePay Integration & Webhook Setup | InProgress | Epic 4 |
 | 4.2 | Subscription Plans & Payment Flow | InProgress | Epic 4 |
 | 4.3 | Coupon Allocation & Subscription Management | InProgress | Epic 4 |
-| 5.1 | QR Code Generation & Display | Draft | Epic 5 |
-| 5.2 | QR Code Validation (Restaurant Side) | Draft | Epic 5 |
-| 5.3 | Coupon History & Status Tracking | Draft | Epic 5 |
+| 5.1 | QR Code Generation & Display | InProgress | Epic 5 |
+| 5.2 | QR Code Validation (Restaurant Side) | InProgress | Epic 5 |
+| 5.3 | Coupon History & Status Tracking | InProgress | Epic 5 |
 | 6.1 | Real-time Chat Infrastructure | Draft | Epic 6 |
 | 6.2 | Chat UI (Client App) | Draft | Epic 6 |
 | 6.3 | Chat UI (Restaurant Panel) | Draft | Epic 6 |
@@ -81,11 +81,25 @@
 | 7.5 | Admin Dashboard & Metrics | Draft | Epic 7 |
 | 7.6 | City Management | Draft | Epic 7 |
 
-**Totais:** 29 stories (23 Draft, 6 InProgress, 0 Done)
+**Totais:** 29 stories (20 Draft, 9 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
 
-### Sessao 2026-03-19 — Stories 4.1, 4.2, 4.3 Implementation
+### Sessao 2026-03-19 — Stories 5.1, 5.2, 5.3 Implementation
+
+**Story 5.1 — QR Code Generation & Display** (InProgress):
+- Tela QR Code completa: verifica elegibilidade (cupom disponivel + nao usado neste restaurante), timer 15min com countdown MM:SS, cores warning/error, placeholder QR 250x250 com coupon ID truncado, botao Regenerar quando expira, estados: loading, ja usado, sem cupom, QR ativo
+- Arquivos: `apps/mobile/app/coupon/[id].tsx`
+
+**Story 5.2 — QR Code Validation (Restaurant Side)** (InProgress):
+- Pagina validacao completa: placeholder camera QR, input manual UUID, chamada RPC validate_coupon, overlay sucesso (verde, check) e erro (vermelho, motivo), auto-dismiss 3s, lista "Validados Hoje" com nome do cliente e hora, carrega restaurant_id do admin logado
+- Arquivos: `apps/restaurant-web/src/app/(dashboard)/validate/page.tsx`
+
+**Story 5.3 — Coupon History & Status Tracking** (InProgress):
+- Tela Meus Cupons completa: header card com progresso (X de Y restantes, barra #FF6B35, extras em #FFCB47), segmented control 3 tabs (Disponiveis/Usados/Expirados), coupon cards com border-left colorido por status, source badges (Indicacao azul, Avaliacao verde, Post roxo), FlatList com RefreshControl, empty states por tab
+- Arquivos: `apps/mobile/app/(tabs)/coupons.tsx`
+
+
 
 **Story 4.1 — AbacatePay Integration & Webhook Setup** (InProgress):
 - Edge Function `handle-payment-webhook` criada com verificacao HMAC, handlers para subscription.paid/cancelled/failed, logging de eventos, allocate_coupons RPC call, push placeholder
