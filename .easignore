@@ -1,0 +1,46 @@
+# ============================================
+# EAS Build — Ignore files not needed for mobile build
+# This file MUST be at the monorepo root
+# ============================================
+
+# LMAS Framework (causes permission errors on EAS builder)
+.lmas-core/
+.lmas/
+.claude/
+.agent/
+.antigravity/
+.codex/
+.cursor/
+.gemini/
+.github/
+AGENTS.md
+
+# Documentation (not needed for build)
+docs/
+
+# Other apps (monorepo — only mobile needed)
+apps/admin-web/
+apps/restaurant-web/
+
+# Supabase (server-side only)
+supabase/
+
+# Build artifacts
+.turbo/
+.next/
+coverage/
+
+# Node modules (EAS reinstalls on builder)
+node_modules/
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+
+# Env files (secrets)
+.env
+.env.local
+.env.*.local
