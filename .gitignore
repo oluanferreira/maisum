@@ -35,6 +35,13 @@ coverage/
 # Supabase
 supabase/.temp/
 
+# External AI/IDE tools (not part of the project)
+.agent/
+.antigravity/
+.codex/
+.cursor/
+.gemini/
+
 # IDE & OS (LMAS)
 .DS_Store
 Thumbs.db
