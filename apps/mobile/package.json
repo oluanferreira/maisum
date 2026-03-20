@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@maisum/shared": "*",
-    "@react-native-async-storage/async-storage": "^3.0.1",
+    "@react-native-async-storage/async-storage": "~2.1.0",
     "@supabase/supabase-js": "^2.99.3",
     "expo": "~55.0.8",
     "expo-clipboard": "^55.0.9",
