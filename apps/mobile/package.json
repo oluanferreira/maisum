@@ -17,14 +17,14 @@
     "@supabase/supabase-js": "^2.99.3",
     "expo": "~55.0.8",
     "expo-clipboard": "^55.0.9",
-    "expo-constants": "~18.0.0",
-    "expo-linking": "~7.0.0",
-    "expo-router": "~5.0.0",
+    "expo-constants": "~55.0.9",
+    "expo-linking": "~55.0.8",
+    "expo-router": "~55.0.7",
     "expo-status-bar": "~55.0.4",
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-safe-area-context": "~5.4.0",
-    "react-native-screens": "~4.11.0",
+    "react-native-screens": "~4.24.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
