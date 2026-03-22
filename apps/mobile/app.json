@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "maisum",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -32,9 +31,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b835eb99-de01-4ad3-97f7-bab7ecb3982e"
+        "projectId": "bc52710e-b6db-478e-9b03-f7431b176b42"
       }
     },
-    "owner": "oluanferreira"
+    "owner": "alexaquino"
   }
 }

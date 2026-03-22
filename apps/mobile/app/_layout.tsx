@@ -1,57 +1,83 @@
-import { useEffect } from 'react'
+import { useEffect, Component, type ReactNode } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { supabase } from '../services/supabase'
 import { useAuthStore } from '../stores/auth'
-import { ActivityIndicator, View } from 'react-native'
+import { Text, View, TouchableOpacity } from 'react-native'
 
-function AuthGate({ children }: { children: React.ReactNode }) {
-  const { session, isLoading, setSession, setLoading } = useAuthStore()
-  const router = useRouter()
-  const segments = useSegments()
+// --- Error Boundary ---
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
 
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setLoading(false)
-    })
+class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null }
 
-    return () => subscription.unsubscribe()
-  }, [])
-
-  useEffect(() => {
-    if (isLoading) return
-
-    const inAuthGroup = segments[0] === '(auth)'
-
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login')
-    } else if (session && inAuthGroup) {
-      router.replace('/(tabs)')
-    }
-  }, [session, isLoading, segments])
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F5' }}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-      </View>
-    )
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
   }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AppErrorBoundary]', error, info.componentStack)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F5', padding: 24 }}>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#1A1A2E', marginBottom: 8 }}>
+            Algo deu errado
+          </Text>
+          <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24 }}>
+            {this.state.error?.message ?? 'Erro inesperado'}
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#FF6B35', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// --- Auth Listener (no redirect logic — index.tsx handles routing) ---
+function AuthListener({ children }: { children: ReactNode }) {
+  const { setSession, setLoading } = useAuthStore()
+
+  useEffect(() => {
+    try {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session)
+        setLoading(false)
+      })
+
+      return () => subscription.unsubscribe()
+    } catch (err) {
+      console.warn('[AuthListener] Failed to initialize auth:', err)
+      setLoading(false)
+    }
+  }, [])
 
   return <>{children}</>
 }
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <StatusBar style="auto" />
-      <AuthGate>
-        <Stack screenOptions={{ headerShown: false }} />
-      </AuthGate>
-    </SafeAreaProvider>
+    <AppErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <AuthListener>
+          <Stack screenOptions={{ headerShown: false }} />
+        </AuthListener>
+      </SafeAreaProvider>
+    </AppErrorBoundary>
   )
 }
