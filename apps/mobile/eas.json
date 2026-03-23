@@ -7,7 +7,8 @@
     "base": {
       "node": "20.19.4",
       "env": {
-        "EXPO_USE_METRO_WORKSPACE_ROOT": "1"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://pjewtzlrqtomilpivjai.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqZXd0emxycXRvbWlscGl2amFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTIwNzksImV4cCI6MjA4OTY4ODA3OX0.FI5hpBk9ArFq2Z3ZLSubY6yAhB6aak9PkhM_M1OLOGE"
       }
     },
     "preview": {
