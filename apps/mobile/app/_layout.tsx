@@ -1,10 +1,12 @@
-import { useEffect, Component, type ReactNode } from 'react'
+import { useEffect, useRef, Component, type ReactNode } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { supabase } from '../services/supabase'
 import { useAuthStore } from '../stores/auth'
 import { Text, View, TouchableOpacity } from 'react-native'
+import * as Notifications from 'expo-notifications'
+import { registerForPushNotifications } from '../services/notifications'
 
 // --- Error Boundary ---
 interface ErrorBoundaryState {
@@ -49,6 +51,8 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 // --- Auth Listener (no redirect logic — index.tsx handles routing) ---
 function AuthListener({ children }: { children: ReactNode }) {
   const { setSession, setLoading } = useAuthStore()
+  const router = useRouter()
+  const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null)
 
   useEffect(() => {
     try {
@@ -57,9 +61,30 @@ function AuthListener({ children }: { children: ReactNode }) {
       } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session)
         setLoading(false)
+
+        // Register for push notifications when user is authenticated
+        if (session) {
+          registerForPushNotifications().catch((err) =>
+            console.warn('[Push] Registration failed:', err)
+          )
+        }
       })
 
-      return () => subscription.unsubscribe()
+      // Listen for notification taps (deep linking)
+      notificationResponseListener.current =
+        Notifications.addNotificationResponseReceivedListener((response) => {
+          const data = response.notification.request.content.data
+          if (data?.url && typeof data.url === 'string') {
+            router.push(data.url as any)
+          }
+        })
+
+      return () => {
+        subscription.unsubscribe()
+        if (notificationResponseListener.current) {
+          Notifications.removeNotificationSubscription(notificationResponseListener.current)
+        }
+      }
     } catch (err) {
       console.warn('[AuthListener] Failed to initialize auth:', err)
       setLoading(false)
