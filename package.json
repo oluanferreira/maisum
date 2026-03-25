@@ -23,6 +23,7 @@
   },
   "packageManager": "npm@11.8.0",
   "dependencies": {
-    "puppeteer": "^24.40.0"
+    "puppeteer": "^24.40.0",
+    "styled-jsx": "^5.1.7"
   }
 }
