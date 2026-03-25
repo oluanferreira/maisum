@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npx turbo build --filter=@maisum/admin-web",
+  "outputDirectory": "apps/admin-web/.next",
+  "framework": "nextjs"
+}
