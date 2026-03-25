@@ -52,6 +52,7 @@ export default function ChatConversationScreen() {
   const [sending, setSending] = useState(false)
 
   const flatListRef = useRef<FlatList>(null)
+  const sendCooldownRef = useRef(false)
 
   // Load conversation info
   useEffect(() => {
@@ -145,7 +146,10 @@ export default function ChatConversationScreen() {
 
   // Send message
   const handleSend = useCallback(async () => {
+    if (sendCooldownRef.current) return
     if (!inputText.trim() || !id || !userId || sending) return
+    sendCooldownRef.current = true
+    setTimeout(() => { sendCooldownRef.current = false }, 500)
 
     setSending(true)
     const content = inputText.trim()

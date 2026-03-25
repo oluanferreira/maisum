@@ -68,6 +68,7 @@ export default function ChatPage() {
   const [filterTab, setFilterTab] = useState<FilterTab>('all')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const sendCooldownRef = useRef(false)
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -166,7 +167,10 @@ export default function ChatPage() {
 
   // Send message
   const handleSend = useCallback(async () => {
+    if (sendCooldownRef.current) return
     if (!inputText.trim() || !activeConversationId || sending) return
+    sendCooldownRef.current = true
+    setTimeout(() => { sendCooldownRef.current = false }, 500)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return

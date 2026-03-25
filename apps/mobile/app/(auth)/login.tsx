@@ -12,7 +12,9 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import * as Linking from 'expo-linking'
 import { useAuthStore } from '@/stores/auth'
+import { supabase } from '@/services/supabase'
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -20,6 +22,40 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+
+  async function handleGoogleSignIn() {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'maisum://auth/callback',
+        },
+      })
+      if (error) throw error
+      if (data?.url) {
+        await Linking.openURL(data.url)
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', 'Nao foi possivel conectar com Google.')
+    }
+  }
+
+  async function handleAppleSignIn() {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: 'maisum://auth/callback',
+        },
+      })
+      if (error) throw error
+      if (data?.url) {
+        await Linking.openURL(data.url)
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', 'Nao foi possivel conectar com Apple.')
+    }
+  }
 
   async function handleSignIn() {
     if (!email || !password) {
@@ -90,10 +126,10 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity style={styles.socialButton} onPress={handleGoogleSignIn}>
               <Text style={styles.socialText}>Google</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity style={styles.socialButton} onPress={handleAppleSignIn}>
               <Text style={styles.socialText}>Apple</Text>
             </TouchableOpacity>
           </View>
