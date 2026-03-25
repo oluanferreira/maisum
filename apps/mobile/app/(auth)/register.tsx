@@ -29,14 +29,14 @@ export default function RegisterScreen() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'maisum://auth/callback',
+          redirectTo: 'maisum://',
         },
       })
       if (error) throw error
       if (data?.url) {
         await Linking.openURL(data.url)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       Alert.alert('Erro', 'Nao foi possivel conectar com Google.')
     }
   }
@@ -46,14 +46,14 @@ export default function RegisterScreen() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
-          redirectTo: 'maisum://auth/callback',
+          redirectTo: 'maisum://',
         },
       })
       if (error) throw error
       if (data?.url) {
         await Linking.openURL(data.url)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       Alert.alert('Erro', 'Nao foi possivel conectar com Apple.')
     }
   }

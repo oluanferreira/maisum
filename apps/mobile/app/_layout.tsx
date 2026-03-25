@@ -53,6 +53,7 @@ function AuthListener({ children }: { children: ReactNode }) {
   const { setSession, setLoading } = useAuthStore()
   const router = useRouter()
   const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null)
+  const hasRegisteredPush = useRef(false)
 
   useEffect(() => {
     try {
@@ -62,8 +63,9 @@ function AuthListener({ children }: { children: ReactNode }) {
         setSession(session)
         setLoading(false)
 
-        // Register for push notifications when user is authenticated
-        if (session) {
+        // Register for push notifications when user is authenticated (once only)
+        if (session && !hasRegisteredPush.current) {
+          hasRegisteredPush.current = true
           registerForPushNotifications().catch((err) =>
             console.warn('[Push] Registration failed:', err)
           )
@@ -74,7 +76,7 @@ function AuthListener({ children }: { children: ReactNode }) {
       notificationResponseListener.current =
         Notifications.addNotificationResponseReceivedListener((response) => {
           const data = response.notification.request.content.data
-          if (data?.url && typeof data.url === 'string') {
+          if (data?.url && typeof data.url === 'string' && data.url.startsWith('/')) {
             router.push(data.url as any)
           }
         })
