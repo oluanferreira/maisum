@@ -213,7 +213,7 @@ export default function QRCodeScreen() {
         {/* QR Code */}
         <View style={[styles.qrPlaceholder, expired && styles.qrExpired]}>
           <QRCode
-            value={JSON.stringify({ coupon_id: coupon.id, restaurant_id: id })}
+            value={coupon.id}
             size={200}
             backgroundColor="#FFFFFF"
             color="#1A1A2E"

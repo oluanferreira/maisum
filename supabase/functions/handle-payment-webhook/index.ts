@@ -50,7 +50,7 @@ serve(async (req: Request) => {
   }
 
   const expectedSig = await hmacSHA256(body, webhookSecret)
-  if (signature !== expectedSig) {
+  if (signature.length !== expectedSig.length || signature !== expectedSig) {
     console.warn('[WEBHOOK] Invalid signature')
     return new Response('Invalid signature', { status: 401 })
   }
@@ -80,43 +80,71 @@ serve(async (req: Request) => {
     console.error('[WEBHOOK] Failed to log event:', logError.message)
   }
 
-  // 6. Handle event by type
+  // 6. Idempotency check — skip if already processed
+  if (event.data?.payment_id) {
+    const { data: existingPayment } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('abacatepay_payment_id', event.data.payment_id)
+      .limit(1)
+      .single()
+
+    if (existingPayment) {
+      console.log(`[WEBHOOK] Already processed payment ${event.data.payment_id}, skipping`)
+      return new Response('Already processed', { status: 200 })
+    }
+  }
+
+  // 7. Handle event by type
   try {
     switch (event.type) {
-      case 'subscription.paid': {
-        // Update subscription status to active and set period dates
+      case 'billing.paid': {
+        const userId = event.data?.metadata?.user_id
+        const planType = event.data?.metadata?.plan_type || 'monthly'
+        const billingId = event.data?.id || event.data?.subscription_id
+
+        if (!userId) {
+          console.error('[WEBHOOK] billing.paid missing user_id in metadata')
+          break
+        }
+
+        // Upsert subscription (create if not exists, update if exists)
+        const periodEnd = planType === 'monthly'
+          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+
         const { data: sub, error: subError } = await supabase
           .from('subscriptions')
-          .update({
+          .upsert({
+            user_id: userId,
+            plan_type: planType,
             status: 'active',
-            current_period_start: event.data.period_start,
-            current_period_end: event.data.period_end,
-          })
-          .eq('abacatepay_subscription_id', event.data.subscription_id)
+            abacatepay_subscription_id: billingId,
+            current_period_start: new Date().toISOString(),
+            current_period_end: periodEnd,
+          }, { onConflict: 'abacatepay_subscription_id' })
           .select()
           .single()
 
         if (subError || !sub) {
-          console.error('[WEBHOOK] Failed to update subscription:', subError?.message)
-          // Log error but still return 200 to avoid webhook retries for data issues
-          await supabase.from('webhook_logs').update({ error: subError?.message }).eq('event_type', event.type).eq('payload->>type', event.type)
+          console.error('[WEBHOOK] Failed to upsert subscription:', subError?.message)
           break
         }
 
-        // Record payment
+        // Record payment (idempotent — checked above)
         const { error: payError } = await supabase.from('payments').insert({
           subscription_id: sub.id,
-          amount: event.data.amount,
+          amount: event.data.amount || (planType === 'monthly' ? 1490 : 8990),
           status: 'paid',
-          payment_method: event.data.payment_method,
-          abacatepay_payment_id: event.data.payment_id,
+          payment_method: event.data.payment_method || 'pix',
+          abacatepay_payment_id: event.data.payment_id || event.data.id,
           paid_at: new Date().toISOString(),
         })
         if (payError) {
           console.error('[WEBHOOK] Failed to insert payment:', payError.message)
         }
 
-        // Allocate coupons via RPC (10 for monthly, 100 for annual)
+        // Allocate coupons via RPC
         const { error: couponError } = await supabase.rpc('allocate_coupons', {
           p_user_id: sub.user_id,
           p_subscription_id: sub.id,
@@ -132,7 +160,7 @@ serve(async (req: Request) => {
           body: 'Seus cupons ja estao disponiveis.',
         })
 
-        console.log(`[WEBHOOK] subscription.paid processed for user ${sub.user_id}`)
+        console.log(`[WEBHOOK] billing.paid processed for user ${sub.user_id}`)
         break
       }
 

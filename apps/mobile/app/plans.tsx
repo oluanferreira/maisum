@@ -14,13 +14,6 @@ import { supabase } from '@/services/supabase'
 
 type PlanType = 'monthly' | 'annual'
 
-const PLAN_CONFIG = {
-  monthly: { amount: 1490, name: 'Mensal +um', description: '10 cupons/mes' },
-  annual: { amount: 8990, name: 'Anual +um', description: '100 cupons/ano' },
-}
-
-const ABACATEPAY_API_KEY = process.env.EXPO_PUBLIC_ABACATEPAY_API_KEY
-
 export default function PlansScreen() {
   const router = useRouter()
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null)
@@ -38,63 +31,23 @@ export default function PlansScreen() {
         return
       }
 
-      // Create billing on AbacatePay
-      const config = PLAN_CONFIG[plan]
-      const response = await fetch('https://api.abacatepay.com/v1/billing/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
-        },
-        body: JSON.stringify({
-          frequency: plan === 'monthly' ? 'MONTHLY' : 'YEARLY',
-          methods: ['PIX', 'CREDIT_CARD'],
-          products: [{
-            externalId: `maisum-${plan}`,
-            name: config.name,
-            description: config.description,
-            quantity: 1,
-            price: config.amount,
-          }],
-          returnUrl: 'maisum://subscription-success',
-          completionUrl: 'maisum://subscription-success',
-          customer: {
-            email: session.user.email,
-          },
-          metadata: {
-            user_id: session.user.id,
-            plan_type: plan,
-          },
-        }),
+      // Call server-side Edge Function (API key never exposed to client)
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { plan_type: plan },
       })
 
-      const result = await response.json()
+      if (error) throw new Error(error.message || 'Erro ao criar cobranca')
+      if (data?.error) throw new Error(data.error)
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao criar cobranca')
-      }
-
-      // Save subscription locally before redirecting
-      await supabase.from('subscriptions').insert({
-        user_id: session.user.id,
-        plan_type: plan,
-        status: 'pending',
-        abacatepay_subscription_id: result.data?.id || result.id,
-        current_period_start: new Date().toISOString(),
-        current_period_end: plan === 'monthly'
-          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-
-      // Open AbacatePay checkout URL in browser
-      const checkoutUrl = result.data?.url || result.url
-      if (checkoutUrl) {
-        await Linking.openURL(checkoutUrl)
+      // Open checkout URL in browser
+      if (data?.checkout_url) {
+        await Linking.openURL(data.checkout_url)
       } else {
         Alert.alert('Sucesso', 'Cobranca criada! Verifique seu email para o link de pagamento.')
       }
-    } catch (err: any) {
-      Alert.alert('Erro', err.message || 'Nao foi possivel iniciar o pagamento. Tente novamente.')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel iniciar o pagamento.'
+      Alert.alert('Erro', message)
     } finally {
       setIsLoading(false)
       setSelectedPlan(null)
@@ -180,8 +133,6 @@ export default function PlansScreen() {
           <Text style={styles.paymentLabel}>Formas de pagamento aceitas:</Text>
           <View style={styles.paymentIcons}>
             <View style={styles.paymentChip}><Text style={styles.paymentChipText}>PIX</Text></View>
-            <View style={styles.paymentChip}><Text style={styles.paymentChipText}>Cartao</Text></View>
-            <View style={styles.paymentChip}><Text style={styles.paymentChipText}>Boleto</Text></View>
           </View>
         </View>
       </ScrollView>

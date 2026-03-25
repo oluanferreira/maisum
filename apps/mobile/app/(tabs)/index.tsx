@@ -93,10 +93,6 @@ function RestaurantCard({ restaurant, onPress }: { restaurant: Restaurant; onPre
       {restaurant.cities?.name && (
         <Text style={styles.cardCity}>{restaurant.cities.name}</Text>
       )}
-      <View style={styles.availableBadge}>
-        <View style={styles.greenDot} />
-        <Text style={styles.availableText}>Disponivel agora</Text>
-      </View>
     </TouchableOpacity>
   )
 }
@@ -116,10 +112,13 @@ export default function HomeScreen() {
 
   const fetchRestaurants = useCallback(async () => {
     try {
+      // TODO: Replace with a DB view (avg_rating, review_count) when data grows
+      // to avoid fetching all reviews client-side.
       const { data, error } = await supabase
         .from('restaurants')
         .select('*, cities(name), reviews(rating)')
         .eq('is_active', true)
+        .limit(100)
 
       if (error) throw error
 
@@ -500,23 +499,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     marginTop: 2,
-  },
-  availableBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  greenDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  availableText: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '500',
   },
   // Skeleton
   skeletonBlock: {

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Suspense } from 'react'
-import { createClient } from '@/../../lib/supabase/client'
+import { createClient } from '@/../lib/supabase/client'
 
 function LoginForm() {
   const router = useRouter()
