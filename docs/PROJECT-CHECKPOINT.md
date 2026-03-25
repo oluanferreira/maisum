@@ -1,14 +1,14 @@
 # PROJECT CHECKPOINT — +um (MAISUM)
 
-> Ultima atualizacao: 2026-03-20
+> Ultima atualizacao: 2026-03-25
 
 ## Status Geral
 
 | Item | Status |
 |------|--------|
 | **Workflow** | Greenfield Full-Stack |
-| **Phase atual** | Phase 2 DONE — pronto para Phase 3 |
-| **Step atual** | 29 stories Draft → proximo: Phase 3 Development (Epic 1) |
+| **Phase atual** | Phase 3 iniciando — infra conectada, pronto para dev |
+| **Step atual** | 29 stories scaffolded (~65% code). Supabase Cloud conectado. Placeholders restantes. |
 
 ## Documentos do Projeto
 
@@ -86,6 +86,32 @@
 **Totais:** 29 stories (10 Draft, 19 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
+
+### Sessao 2026-03-25 — Infrastructure Fixes & Audit
+
+**Auditoria completa do projeto** (Morpheus):
+- Verificacao de todos os arquivos, codigo, migrations, .env, git status
+- Projeto Supabase Cloud JA existia (pjewtzlrqtomilpivjai) com migrations 001-007 aplicadas
+- Mobile .env JA tinha keys reais configuradas
+
+**Fixes criticos aplicados** (@dev):
+- Migration 008 `webhook_logs` criada e aplicada no Cloud (tabela faltava para Edge Function)
+- `.env.local` criado para admin-web e restaurant-web (NEXT_PUBLIC_SUPABASE_URL + ANON_KEY)
+- `app.json` owner corrigido: alexaquino → oluanferreira
+- Types gerados do Supabase remoto (924 linhas, 16 tabelas completas)
+- `packages/shared/src/types/index.ts` atualizado com re-exports e enum aliases
+- Commit: `fix: infrastructure fixes — webhook_logs, Supabase Cloud compat, types gen`
+- Push para GitHub (@devops)
+
+**Problemas identificados (pendentes):**
+- Mapa placeholder (sem react-native-maps)
+- QR Code placeholder (sem react-native-qrcode-svg)
+- Social login nao funcional (Google/Apple)
+- Push notifications placeholder (sem expo-notifications)
+- Realtime chat comentado
+- NativeWind nao instalado (usa StyleSheet)
+- Zero testes
+- Phosphor Icons nao importados (usa emojis)
 
 ### Sessao 2026-03-20 — APK Build Setup
 
@@ -270,7 +296,9 @@
 
 ## Proximos Passos
 
-1. **PO Validation:** Validar stories dos Epics 1-7 (`@po *validate-story-draft`) — 29 stories Draft aguardando validacao
-3. **Phase 3:** Development Cycle — comecar pelo Epic 1 (Foundation & Auth)
-3. Solicitar ao usuario os sites/redes sociais dos restaurantes parceiros
-4. Resolver 4 observacoes low durante implementacao dos epics correspondentes
+1. [ ] **Substituir placeholders criticos:** QR Code (react-native-qrcode-svg), Mapa (react-native-maps), Push (expo-notifications)
+2. [ ] **Conectar Realtime no chat** — descomentar subscriptions Supabase Realtime
+3. [ ] **Social login funcional** — configurar Google OAuth + Apple Sign-In no Supabase
+4. [ ] **Testes** — ao menos smoke tests para auth, coupon validation, webhook
+5. [ ] Solicitar ao usuario os sites/redes sociais dos restaurantes parceiros
+6. [ ] Resolver 4 observacoes low da PO Validation durante implementacao

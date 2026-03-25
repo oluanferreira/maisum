@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -20,7 +19,39 @@ interface Restaurant {
   cuisine_type: string | null
   is_active: boolean
   cities: { name: string } | null
+  avg_rating: number | null
+  review_count: number | null
   [key: string]: unknown
+}
+
+// --- Cuisine category config ---
+const CUISINE_ICONS: Record<string, string> = {
+  'Brasileira': '🇧🇷',
+  'Italiana': '🍝',
+  'Japonesa': '🍣',
+  'Mexicana': '🌮',
+  'Pizza': '🍕',
+  'Pizzaria': '🍕',
+  'Hamburguer': '🍔',
+  'Hamburgueria': '🍔',
+  'Churrasco': '🥩',
+  'Churrascaria': '🥩',
+  'Açaí': '🍇',
+  'Padaria': '🥐',
+  'Cafeteria': '☕',
+  'Sorveteria': '🍦',
+  'Doces': '🍰',
+  'Saudável': '🥗',
+  'Fit': '🥗',
+  'Árabe': '🧆',
+  'Chinesa': '🥡',
+  'Frutos do Mar': '🦐',
+  'Lanche': '🌭',
+  'Pastelaria': '🥟',
+  'Marmita': '🍱',
+  'Self-service': '🍽️',
+  'Vegana': '🌱',
+  'Vegetariana': '🌱',
 }
 
 // --- Skeleton Card ---
@@ -36,11 +67,25 @@ function SkeletonCard() {
 
 // --- Restaurant Card ---
 function RestaurantCard({ restaurant, onPress }: { restaurant: Restaurant; onPress: () => void }) {
+  const hasRating = restaurant.avg_rating != null && restaurant.avg_rating > 0
+  const ratingDisplay = hasRating ? Number(restaurant.avg_rating).toFixed(1) : null
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardName} numberOfLines={1}>{restaurant.name}</Text>
-        <Text style={styles.cardRating}>★ 4.5</Text>
+        {hasRating ? (
+          <View style={styles.ratingContainer}>
+            <Text style={styles.cardRating}>★ {ratingDisplay}</Text>
+            {restaurant.review_count != null && restaurant.review_count > 0 && (
+              <Text style={styles.reviewCount}>({restaurant.review_count})</Text>
+            )}
+          </View>
+        ) : (
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>Novo</Text>
+          </View>
+        )}
       </View>
       {restaurant.cuisine_type && (
         <Text style={styles.cardCuisine}>{restaurant.cuisine_type}</Text>
@@ -73,12 +118,25 @@ export default function HomeScreen() {
     try {
       const { data, error } = await supabase
         .from('restaurants')
-        .select('*, cities(name)')
+        .select('*, cities(name), reviews(rating)')
         .eq('is_active', true)
 
       if (error) throw error
 
-      const items = (data ?? []) as Restaurant[]
+      // Compute avg_rating and review_count from joined reviews
+      const items = (data ?? []).map((r: Record<string, unknown>) => {
+        const reviews = (r.reviews ?? []) as { rating: number }[]
+        const reviewCount = reviews.length
+        const avgRating = reviewCount > 0
+          ? reviews.reduce((sum, rev) => sum + rev.rating, 0) / reviewCount
+          : null
+        return {
+          ...r,
+          avg_rating: avgRating,
+          review_count: reviewCount,
+          reviews: undefined, // drop raw reviews from state
+        }
+      }) as Restaurant[]
       setRestaurants(items)
 
       // Extract distinct cuisine types for filter chips
@@ -144,10 +202,64 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Map Placeholder */}
-      <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapText}>Mapa - Requer Google Maps API Key</Text>
+      {/* Hero Header */}
+      <View style={styles.heroHeader}>
+        <Text style={styles.heroTitle}>Restaurantes em Jequie, BA</Text>
+        <Text style={styles.heroSubtitle}>
+          {loading ? 'Carregando...' : `${restaurants.length} restaurante${restaurants.length !== 1 ? 's' : ''} disponive${restaurants.length !== 1 ? 'is' : 'l'}`}
+        </Text>
       </View>
+
+      {/* Cuisine Category Selector */}
+      {cuisineOptions.length > 0 && (
+        <View style={styles.categoriesContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesContent}
+          >
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                selectedCuisines.length === 0 && styles.categoryChipActive,
+              ]}
+              onPress={() => setSelectedCuisines([])}
+            >
+              <Text style={styles.categoryIcon}>🍽️</Text>
+              <Text
+                style={[
+                  styles.categoryLabel,
+                  selectedCuisines.length === 0 && styles.categoryLabelActive,
+                ]}
+              >
+                Todos
+              </Text>
+            </TouchableOpacity>
+            {cuisineOptions.map((cuisine) => (
+              <TouchableOpacity
+                key={cuisine}
+                style={[
+                  styles.categoryChip,
+                  selectedCuisines.includes(cuisine) && styles.categoryChipActive,
+                ]}
+                onPress={() => handleToggleCuisine(cuisine)}
+              >
+                <Text style={styles.categoryIcon}>
+                  {CUISINE_ICONS[cuisine] ?? '🍴'}
+                </Text>
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    selectedCuisines.includes(cuisine) && styles.categoryLabelActive,
+                  ]}
+                >
+                  {cuisine}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Restaurant List */}
       <ScrollView
@@ -160,15 +272,6 @@ export default function HomeScreen() {
       >
         {/* Search Bar */}
         <SearchBar value={searchQuery} onChangeText={setSearchQuery} />
-
-        {/* Cuisine Filter Chips */}
-        {cuisineOptions.length > 0 && (
-          <FilterChips
-            options={cuisineOptions}
-            selected={selectedCuisines}
-            onToggle={handleToggleCuisine}
-          />
-        )}
 
         {/* Sort Options */}
         <View style={styles.sortRow}>
@@ -250,17 +353,61 @@ const styles = StyleSheet.create({
   iconText: {
     fontSize: 18,
   },
-  // Map
-  mapPlaceholder: {
-    height: '40%',
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
+  // Hero Header
+  heroHeader: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
   },
-  mapText: {
-    fontSize: 16,
-    color: '#6B7280',
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  heroSubtitle: {
+    fontSize: 14,
     fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 4,
+  },
+  // Category Selector
+  categoriesContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  categoriesContent: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  categoryChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    minWidth: 72,
+  },
+  categoryChipActive: {
+    backgroundColor: '#FFF1EB',
+    borderWidth: 1.5,
+    borderColor: '#FF6B35',
+  },
+  categoryIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  categoryLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  categoryLabelActive: {
+    color: '#FF6B35',
   },
   // List
   listContainer: {
@@ -318,10 +465,31 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
   cardRating: {
     fontSize: 14,
     fontWeight: '600',
     color: '#F59E0B',
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  newBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  newBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#3B82F6',
   },
   cardCuisine: {
     fontSize: 13,

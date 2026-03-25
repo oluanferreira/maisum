@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import QRCode from 'react-native-qrcode-svg'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '@/services/supabase'
 
@@ -209,10 +210,15 @@ export default function QRCodeScreen() {
         {/* Subtitle */}
         <Text style={styles.subtitle}>Seu cupom +um</Text>
 
-        {/* QR Code Placeholder */}
+        {/* QR Code */}
         <View style={[styles.qrPlaceholder, expired && styles.qrExpired]}>
-          <Text style={styles.qrIdText}>{truncatedId}</Text>
-          <Text style={styles.qrSubText}>Codigo do cupom</Text>
+          <QRCode
+            value={JSON.stringify({ coupon_id: coupon.id, restaurant_id: id })}
+            size={200}
+            backgroundColor="#FFFFFF"
+            color="#1A1A2E"
+          />
+          <Text style={styles.qrSubText}>{truncatedId}</Text>
         </View>
 
         {/* Instruction */}

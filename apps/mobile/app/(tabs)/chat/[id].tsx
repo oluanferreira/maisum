@@ -113,28 +113,35 @@ export default function ChatConversationScreen() {
     }
   }, [id, userId, messages.length])
 
-  // Realtime subscription placeholder
-  // To enable real-time messages, set up a Supabase Realtime channel:
-  //
-  // useEffect(() => {
-  //   if (!id) return
-  //   const channel = supabase
-  //     .channel(`conversation:${id}`)
-  //     .on('postgres_changes', {
-  //       event: 'INSERT',
-  //       schema: 'public',
-  //       table: 'messages',
-  //       filter: `conversation_id=eq.${id}`,
-  //     }, (payload) => {
-  //       const newMsg = payload.new as Message
-  //       setMessages((prev) => [...prev, newMsg])
-  //     })
-  //     .subscribe()
-  //
-  //   return () => {
-  //     supabase.removeChannel(channel)
-  //   }
-  // }, [id])
+  // Realtime subscription — listen for new messages
+  useEffect(() => {
+    if (!id) return
+
+    const channel = supabase
+      .channel(`messages:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${id}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as Message
+          setMessages((prev) => {
+            // Avoid duplicates from optimistic updates
+            if (prev.some((m) => m.id === newMsg.id)) return prev
+            return [...prev, newMsg]
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [id])
 
   // Send message
   const handleSend = useCallback(async () => {

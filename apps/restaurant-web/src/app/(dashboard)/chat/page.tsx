@@ -127,6 +127,38 @@ export default function ChatPage() {
     }
   }, [activeConversationId, fetchMessages])
 
+  // Realtime subscription — listen for new messages
+  useEffect(() => {
+    if (!activeConversationId) return
+
+    const channel = supabase
+      .channel(`messages:${activeConversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${activeConversationId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as Message
+          setMessages((prev) => {
+            // Avoid duplicates from optimistic updates
+            if (prev.some((m) => m.id === newMsg.id)) return prev
+            return [...prev, newMsg]
+          })
+          // Refresh conversation list to update last message preview
+          fetchConversations()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [activeConversationId, fetchConversations])
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
