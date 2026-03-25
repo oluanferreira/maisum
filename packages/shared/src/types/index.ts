@@ -1,5 +1,15 @@
-// Placeholder types — will be populated with Supabase gen types in Story 1.2
+export type { Database } from './supabase'
+export type { Json } from './supabase'
 
+// Convenience aliases from DB enums
 export type UserRole = 'user' | 'restaurant_admin' | 'super_admin'
 export type PlanType = 'monthly' | 'annual'
 export type CouponStatus = 'available' | 'used' | 'expired'
+export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due'
+export type BenefitCategory = 'dish' | 'drink' | 'dessert' | 'combo' | 'other'
+export type CouponSource = 'subscription' | 'referral' | 'review' | 'social' | 'bonus'
+export type ReferralStatus = 'pending' | 'completed' | 'expired'
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
+export type PaymentMethod = 'pix' | 'credit_card' | 'boleto'
+export type SocialProofType = 'instagram' | 'tiktok' | 'other'
+export type SocialProofStatus = 'pending' | 'approved' | 'rejected'

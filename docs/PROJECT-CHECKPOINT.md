@@ -1,6 +1,6 @@
 # PROJECT CHECKPOINT — +um (MAISUM)
 
-> Ultima atualizacao: 2026-03-19
+> Ultima atualizacao: 2026-03-20
 
 ## Status Geral
 
@@ -34,7 +34,7 @@
 ## Decisoes Tomadas
 
 - Stack: Expo + Supabase + Next.js + AbacatePay + Turborepo
-- Planos: R$89,90/ano (100 cupons) e R$14,90/mês (10 cupons)
+- Planos: R$89,90/ano (100 cupons) e R$19,90/mês (10 cupons)
 - 3 painéis: App cliente (mobile) + Admin restaurante (web) + Admin +um (web)
 - Gamificacao: Indica e Ganha + Avaliacao + Post social
 - Cidade inicial: Jequie-BA (multi-cidade ready)
@@ -46,6 +46,8 @@
 - DB: PostgreSQL 15 com RLS, 14 tabelas, ENUMs tipados, HMAC anti-fraude
 - Deploy: Supabase Cloud (backend) + Vercel (webs) + Expo EAS (mobile)
 - Realtime: Supabase Realtime channels por conversa
+- Build APK: Conta Alex (alexaquino / alex.energreenerbr@gmail.com) para builds de teste
+- Conta Luan Expo: oluanferreira / projectId b835eb99-de01-4ad3-97f7-bab7ecb3982e (restaurar apos build do Alex)
 
 ## Status das Stories
 
@@ -84,6 +86,22 @@
 **Totais:** 29 stories (10 Draft, 19 InProgress, 0 Done)
 
 ## Ultimo Trabalho Realizado
+
+### Sessao 2026-03-20 — APK Build Setup
+
+**Build APK para teste** (SUCESSO):
+- APK gerado com sucesso na conta do Alex (alexaquino)
+- Link: https://expo.dev/accounts/alexaquino/projects/maisum/builds/afd29d90-f869-4dc2-a8d1-e56bfba47c1c
+- 5 tentativas de build ate sucesso — erros resolvidos:
+  1. `main` → `expo-router/entry` (19/03)
+  2. `expo-clipboard` faltando (19/03)
+  3. `async-storage` v3 → `~2.1.0` (19/03)
+  4. `requireCommit` removido do eas.json (19/03)
+  5. `.easignore` movido para raiz do monorepo (19/03)
+  6. `newArchEnabled` removido do app.json (20/03)
+  7. `react-native-screens` 4.11 → ~4.23.0 (20/03 — erro C++ Shared deprecated)
+  8. `expo-constants` ~18.0 → ~55.0.9, `expo-linking` ~7.0 → ~55.0.8, `expo-router` ~5.0 → ~55.0.7 (20/03 — Kotlin overrides nothing)
+- Dados da conta Luan salvos em memoria para restauracao pos-build
 
 ### Sessao 2026-03-19 — Stories 7.1-7.6 Implementation
 
@@ -158,7 +176,7 @@
 - Arquivos: `supabase/functions/handle-payment-webhook/index.ts`
 
 **Story 4.2 — Subscription Plans & Payment Flow** (InProgress):
-- Tela de selecao de planos completa: card Anual (R$89,90, 100 cupons, badge "Melhor Valor", "Economize 45%") e card Mensal (R$14,90, 10 cupons)
+- Tela de selecao de planos completa: card Anual (R$89,90, 100 cupons, badge "Melhor Valor", "Economize 45%") e card Mensal (R$19,90, 10 cupons)
 - Design tokens aplicados: Primary #FF6B35, Accent #FFCB47, Success #22C55E
 - Placeholder para checkout AbacatePay (Alert informativo enquanto API key nao esta configurada)
 - Arquivos: `apps/mobile/app/plans.tsx`

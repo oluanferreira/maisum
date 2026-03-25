@@ -3,9 +3,12 @@
 -- +um Database Schema
 -- ===========================================
 
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Extensions (schema=extensions is Supabase Cloud default)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" SCHEMA extensions;
+
+-- Make extension functions available without schema prefix
+ALTER DATABASE postgres SET search_path TO public, extensions;
 
 -- ENUM Types
 CREATE TYPE user_role AS ENUM ('user', 'restaurant_admin', 'super_admin');

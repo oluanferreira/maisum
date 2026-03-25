@@ -15,7 +15,7 @@
 - Entregar um app mobile (iOS + Android) de beneficios gastronomicos que permita usuarios resgatarem um item adicional gratuito em restaurantes parceiros
 - Criar um painel admin para restaurantes com autonomia total sobre configuracao de beneficios, validacao de cupons e comunicacao com clientes
 - Criar um painel admin central (+um) para gerenciamento completo da plataforma
-- Implementar sistema de assinaturas recorrentes (mensal R$14,90 / anual R$89,90) via AbacatePay
+- Implementar sistema de assinaturas recorrentes (mensal R$19,90 / anual R$89,90) via AbacatePay
 - Lancar em Jequie-BA com arquitetura multi-cidade desde o dia 1
 - Atingir 500 assinantes e 30+ restaurantes nos primeiros 6 meses
 
@@ -44,7 +44,7 @@ O +um resolve isso oferecendo um modelo acessivel ("pediu um, recebe +um"), com 
 - **FR4:** O sistema deve implementar recuperacao de senha para todos os roles
 
 **Assinaturas & Pagamentos**
-- **FR5:** O sistema deve oferecer 2 planos de assinatura: Mensal (R$14,90, 10 cupons) e Anual (R$89,90, 100 cupons)
+- **FR5:** O sistema deve oferecer 2 planos de assinatura: Mensal (R$19,90, 10 cupons) e Anual (R$89,90, 100 cupons)
 - **FR6:** Pagamentos devem ser processados via AbacatePay suportando PIX, cartao de credito e boleto
 - **FR7:** Assinaturas devem ser recorrentes com renovacao automatica
 - **FR8:** O usuario deve poder cancelar sua assinatura a qualquer momento pelo app
@@ -564,7 +564,7 @@ Unit + Integration:
 **so that** I can start using my coupons.
 
 **Acceptance Criteria:**
-1. Tela de selecao de plano: card Mensal (R$14,90/mes, 10 cupons) e card Anual (R$89,90/ano, 100 cupons, badge "Melhor valor")
+1. Tela de selecao de plano: card Mensal (R$19,90/mes, 10 cupons) e card Anual (R$89,90/ano, 100 cupons, badge "Melhor valor")
 2. Ao selecionar plano, redireciona para checkout do AbacatePay (PIX, cartao, boleto)
 3. Apos pagamento confirmado (webhook), app atualiza status automaticamente
 4. Tela de sucesso com animacao e contagem de cupons recebidos

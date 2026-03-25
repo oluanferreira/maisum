@@ -637,7 +637,7 @@ Composicao: Label (top) + Input + Helper Text / Error Message (bottom)
 │                                   │
 │  ┌─────────────────────────────┐ │
 │  │  Mensal                     │ │
-│  │  R$ 14,90/mes               │ │
+│  │  R$ 19,90/mes               │ │
 │  │  10 cupons/mes              │ │
 │  │        [Assinar]            │ │
 │  └─────────────────────────────┘ │

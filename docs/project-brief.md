@@ -15,7 +15,7 @@
 
 **Mercado-alvo:** Consumidores de todas as classes que frequentam restaurantes, lancando em Jequie-BA com arquitetura multi-cidade desde o dia 1.
 
-**Proposta de valor:** Transparencia radical, autonomia total do restaurante, comunicacao direta restaurante-cliente via chat, e independencia de instituicoes financeiras. Tudo com preco acessivel (a partir de R$14,90/mes).
+**Proposta de valor:** Transparencia radical, autonomia total do restaurante, comunicacao direta restaurante-cliente via chat, e independencia de instituicoes financeiras. Tudo com preco acessivel (a partir de R$19,90/mes).
 
 ---
 
@@ -145,7 +145,7 @@ App mobile (iOS + Android) onde o usuario assina, recebe cupons, e ao visitar um
 
 #### App do Cliente (Mobile)
 
-- **Onboarding + Assinatura:** Cadastro, escolha de plano (mensal R$14,90 / anual R$89,90), pagamento via AbacatePay (PIX, cartao, boleto)
+- **Onboarding + Assinatura:** Cadastro, escolha de plano (mensal R$19,90 / anual R$89,90), pagamento via AbacatePay (PIX, cartao, boleto)
 - **Home com mapa:** Restaurantes parceiros proximos com filtros (tipo, distancia, beneficio disponivel)
 - **Detalhes do restaurante:** Fotos, descricao, cardapio do beneficio, horarios, avaliacoes, localizacao no mapa
 - **Meus Cupons:** Cupons disponiveis, usados, expirados. 1 cupom por restaurante por vez
@@ -320,7 +320,7 @@ App mobile (iOS + Android) onde o usuario assina, recebe cupons, e ao visitar um
 | Criterio | +um | Duo Gourmet | Compre & Ganhe |
 |----------|-----|-------------|----------------|
 | Modelo | Assinatura + cupons | Assinatura ilimitada | Indefinido |
-| Preco | R$89,90/ano ou R$14,90/mes | ~R$35-50/mes | N/A |
+| Preco | R$89,90/ano ou R$19,90/mes | ~R$35-50/mes | N/A |
 | Restaurantes | Todos os tipos | Fine dining | N/A |
 | Cidades | Jequie-BA + expansao | 80+ (capitais) | Desconhecido |
 | Autonomia restaurante | Total (painel proprio) | Baixa | N/A |

@@ -3,9 +3,12 @@
 -- Order respects FK dependencies
 -- ===========================================
 
+-- Ensure extension functions are in search_path for this session
+SET search_path TO public, extensions;
+
 -- Cities (no FK deps)
 CREATE TABLE cities (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   state TEXT NOT NULL,
   is_active BOOLEAN DEFAULT true,
@@ -26,7 +29,7 @@ CREATE TABLE profiles (
 
 -- Restaurants
 CREATE TABLE restaurants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
   address TEXT NOT NULL,
@@ -43,7 +46,7 @@ CREATE TABLE restaurants (
 
 -- Restaurant Invites
 CREATE TABLE restaurant_invites (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   token TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '7 days'),
@@ -53,7 +56,7 @@ CREATE TABLE restaurant_invites (
 
 -- Benefits
 CREATE TABLE benefits (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
@@ -64,7 +67,7 @@ CREATE TABLE benefits (
 
 -- Benefit Rules
 CREATE TABLE benefit_rules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   available_days INT[] DEFAULT '{0,1,2,3,4,5,6}',
   available_hours_start TIME DEFAULT '00:00',
@@ -76,7 +79,7 @@ CREATE TABLE benefit_rules (
 
 -- Subscriptions
 CREATE TABLE subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   plan_type plan_type NOT NULL,
   status subscription_status DEFAULT 'active',
@@ -88,7 +91,7 @@ CREATE TABLE subscriptions (
 
 -- Coupons
 CREATE TABLE coupons (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   subscription_id UUID REFERENCES subscriptions(id),
   status coupon_status DEFAULT 'available',
@@ -102,7 +105,7 @@ CREATE TABLE coupons (
 
 -- Reviews
 CREATE TABLE reviews (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   coupon_id UUID REFERENCES coupons(id),
@@ -114,7 +117,7 @@ CREATE TABLE reviews (
 
 -- Conversations
 CREATE TABLE conversations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   last_message_at TIMESTAMPTZ DEFAULT now(),
@@ -124,7 +127,7 @@ CREATE TABLE conversations (
 
 -- Messages
 CREATE TABLE messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES profiles(id),
   sender_role user_role NOT NULL,
@@ -135,7 +138,7 @@ CREATE TABLE messages (
 
 -- Referrals
 CREATE TABLE referrals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   referrer_id UUID NOT NULL REFERENCES profiles(id),
   referred_id UUID REFERENCES profiles(id),
   status referral_status DEFAULT 'pending',
@@ -145,7 +148,7 @@ CREATE TABLE referrals (
 
 -- Social Proofs
 CREATE TABLE social_proofs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   restaurant_id UUID NOT NULL REFERENCES restaurants(id),
   coupon_id UUID REFERENCES coupons(id),
@@ -158,7 +161,7 @@ CREATE TABLE social_proofs (
 
 -- Payments
 CREATE TABLE payments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
   amount INT NOT NULL,
   status payment_status DEFAULT 'pending',
@@ -170,7 +173,7 @@ CREATE TABLE payments (
 
 -- Push Tokens
 CREATE TABLE push_tokens (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   token TEXT NOT NULL,
   platform TEXT NOT NULL CHECK (platform IN ('ios', 'android')),
