@@ -9,8 +9,17 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import * as Linking from 'expo-linking'
+import { supabase } from '@/services/supabase'
 
 type PlanType = 'monthly' | 'annual'
+
+const PLAN_CONFIG = {
+  monthly: { amount: 1490, name: 'Mensal +um', description: '10 cupons/mes' },
+  annual: { amount: 8990, name: 'Anual +um', description: '100 cupons/ano' },
+}
+
+const ABACATEPAY_API_KEY = process.env.EXPO_PUBLIC_ABACATEPAY_API_KEY
 
 export default function PlansScreen() {
   const router = useRouter()
@@ -22,16 +31,70 @@ export default function PlansScreen() {
     setIsLoading(true)
 
     try {
-      // TODO: Replace with actual AbacatePay checkout when API key is available
-      // import { createSubscription } from '@/services/payments'
-      // const result = await createSubscription(plan)
-      Alert.alert(
-        'Checkout',
-        'Pagamento sera integrado com AbacatePay. O fluxo de checkout sera habilitado quando a API key estiver configurada.',
-        [{ text: 'OK' }],
-      )
-    } catch {
-      Alert.alert('Erro', 'Nao foi possivel iniciar o pagamento. Tente novamente.')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        Alert.alert('Login necessario', 'Faca login para assinar um plano.')
+        router.push('/(auth)/login')
+        return
+      }
+
+      // Create billing on AbacatePay
+      const config = PLAN_CONFIG[plan]
+      const response = await fetch('https://api.abacatepay.com/v1/billing/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
+        },
+        body: JSON.stringify({
+          frequency: plan === 'monthly' ? 'MONTHLY' : 'YEARLY',
+          methods: ['PIX', 'CREDIT_CARD'],
+          products: [{
+            externalId: `maisum-${plan}`,
+            name: config.name,
+            description: config.description,
+            quantity: 1,
+            price: config.amount,
+          }],
+          returnUrl: 'maisum://subscription-success',
+          completionUrl: 'maisum://subscription-success',
+          customer: {
+            email: session.user.email,
+          },
+          metadata: {
+            user_id: session.user.id,
+            plan_type: plan,
+          },
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao criar cobranca')
+      }
+
+      // Save subscription locally before redirecting
+      await supabase.from('subscriptions').insert({
+        user_id: session.user.id,
+        plan_type: plan,
+        status: 'pending',
+        abacatepay_subscription_id: result.data?.id || result.id,
+        current_period_start: new Date().toISOString(),
+        current_period_end: plan === 'monthly'
+          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+
+      // Open AbacatePay checkout URL in browser
+      const checkoutUrl = result.data?.url || result.url
+      if (checkoutUrl) {
+        await Linking.openURL(checkoutUrl)
+      } else {
+        Alert.alert('Sucesso', 'Cobranca criada! Verifique seu email para o link de pagamento.')
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err.message || 'Nao foi possivel iniciar o pagamento. Tente novamente.')
     } finally {
       setIsLoading(false)
       setSelectedPlan(null)
