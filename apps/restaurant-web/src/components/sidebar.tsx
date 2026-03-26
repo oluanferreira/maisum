@@ -16,7 +16,7 @@ import { createClient } from '@/../lib/supabase/client'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: ChartBar },
-  { href: '/benefits', label: 'Beneficios', icon: Gift },
+  { href: '/benefits', label: 'Cardapio +um', icon: Gift },
   { href: '/validate', label: 'Validar Cupom', icon: QrCode },
   { href: '/chat', label: 'Chat', icon: ChatCircle },
   { href: '/reviews', label: 'Avaliacoes', icon: Star },
