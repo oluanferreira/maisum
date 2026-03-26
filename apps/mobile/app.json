@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "+um",
-    "slug": "maisum-app",
+    "slug": "maisum",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
