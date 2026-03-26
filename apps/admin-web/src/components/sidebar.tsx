@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { createClient } from '@/../lib/supabase/client'
 import {
   ChartBar,
   ForkKnife,
@@ -9,7 +10,7 @@ import {
   CreditCard,
   Bell,
   Buildings,
-  Gear,
+  Camera,
   SignOut,
 } from '@phosphor-icons/react'
 
@@ -19,11 +20,8 @@ const navItems = [
   { href: '/users', label: 'Usuarios', icon: Users },
   { href: '/subscriptions', label: 'Assinaturas', icon: CreditCard },
   { href: '/notifications', label: 'Notificacoes', icon: Bell },
+  { href: '/social-proofs', label: 'Social Proofs', icon: Camera },
   { href: '/cities', label: 'Cidades', icon: Buildings },
-]
-
-const bottomItems = [
-  { href: '/settings', label: 'Config', icon: Gear },
 ]
 
 export function Sidebar() {
@@ -88,39 +86,11 @@ export function Sidebar() {
           style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}
         />
 
-        {bottomItems.map((item) => {
-          const active = isActive(item.href)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 rounded-lg transition-colors"
-              style={{
-                height: 44,
-                paddingLeft: 20,
-                gap: 12,
-                borderRadius: 8,
-                backgroundColor: active ? 'rgba(255,107,53,0.15)' : 'transparent',
-                color: active ? '#FF6B35' : 'rgba(255,255,255,0.7)',
-                borderLeft: active ? '3px solid #FF6B35' : '3px solid transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <item.icon size={20} weight={active ? 'fill' : 'regular'} />
-              <span className="text-sm font-medium">{item.label}</span>
-            </Link>
-          )
-        })}
-
         {/* Sign Out */}
         <button
-          onClick={() => {
-            // signOut action placeholder
+          onClick={async () => {
+            const supabase = createClient()
+            await supabase.auth.signOut()
             window.location.href = '/login'
           }}
           className="flex items-center gap-3 rounded-lg transition-colors"

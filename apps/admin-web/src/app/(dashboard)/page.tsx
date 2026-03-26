@@ -77,17 +77,33 @@ export default function DashboardPage() {
 
     const { data: restaurants } = await restQuery
 
-    if (restaurants) {
-      setTopRestaurants(
-        (restaurants as unknown as { id: string; name: string; cities: { name: string } | null }[]).map(
-          (r) => ({
-            id: r.id,
-            name: r.name,
-            city_name: r.cities?.name || '—',
-            coupons_count: 0,
-          })
-        )
-      )
+    if (restaurants && restaurants.length > 0) {
+      const typedRestaurants = restaurants as unknown as { id: string; name: string; cities: { name: string } | null }[]
+      const restIds = typedRestaurants.map((r) => r.id)
+
+      // Fetch used coupons count per restaurant
+      const { data: coupons } = await supabase
+        .from('coupons')
+        .select('restaurant_id')
+        .in('restaurant_id', restIds)
+        .eq('status', 'used')
+
+      const countMap: Record<string, number> = {}
+      coupons?.forEach((c) => {
+        countMap[c.restaurant_id] = (countMap[c.restaurant_id] || 0) + 1
+      })
+
+      const mapped = typedRestaurants.map((r) => ({
+        id: r.id,
+        name: r.name,
+        city_name: r.cities?.name || '—',
+        coupons_count: countMap[r.id] || 0,
+      }))
+
+      // Sort by coupons_count descending
+      mapped.sort((a, b) => b.coupons_count - a.coupons_count)
+
+      setTopRestaurants(mapped)
     }
 
     setLoading(false)
@@ -221,6 +237,9 @@ export default function DashboardPage() {
                     <th className="pb-2 text-left text-xs font-medium uppercase text-neutral-500">
                       Cidade
                     </th>
+                    <th className="pb-2 text-right text-xs font-medium uppercase text-neutral-500">
+                      Cupons
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
@@ -231,6 +250,7 @@ export default function DashboardPage() {
                         {restaurant.name}
                       </td>
                       <td className="py-3 text-sm text-neutral-600">{restaurant.city_name}</td>
+                      <td className="py-3 text-right text-sm font-semibold text-neutral-900">{restaurant.coupons_count}</td>
                     </tr>
                   ))}
                 </tbody>
