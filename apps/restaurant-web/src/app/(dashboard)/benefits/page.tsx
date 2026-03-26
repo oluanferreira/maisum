@@ -78,18 +78,25 @@ export default function BenefitsPage() {
   const [formDescription, setFormDescription] = useState('')
   const [formCategory, setFormCategory] = useState<BenefitCategory>('prato')
   const [formOriginalPrice, setFormOriginalPrice] = useState('')
-  const [formPromoType, setFormPromoType] = useState<'leve2pague1' | 'outro' | ''>('')
+  const [formPromoType, setFormPromoType] = useState<'leve2pague1' | 'outro'>('leve2pague1')
   const [formPromoCustom, setFormPromoCustom] = useState('')
   const [formPhotoFile, setFormPhotoFile] = useState<File | null>(null)
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Per-benefit rules form — multiple time slots
-  interface RuleSlot { days: number[]; start: string; end: string }
-  const [formRuleSlots, setFormRuleSlots] = useState<RuleSlot[]>([
-    { days: [1, 2, 3, 4, 5], start: '11:00', end: '22:00' },
-  ])
+  // Per-benefit rules form — per-day configuration
+  interface DayRule { enabled: boolean; start: string; end: string }
+  const defaultDayRules = (): Record<number, DayRule> => ({
+    0: { enabled: false, start: '11:00', end: '22:00' },
+    1: { enabled: true, start: '11:00', end: '22:00' },
+    2: { enabled: true, start: '11:00', end: '22:00' },
+    3: { enabled: true, start: '11:00', end: '22:00' },
+    4: { enabled: true, start: '11:00', end: '22:00' },
+    5: { enabled: true, start: '11:00', end: '22:00' },
+    6: { enabled: false, start: '11:00', end: '22:00' },
+  })
+  const [formDayRules, setFormDayRules] = useState<Record<number, DayRule>>(defaultDayRules())
   const [formRuleLimit, setFormRuleLimit] = useState(20)
 
   // Delete confirmation
@@ -147,11 +154,11 @@ export default function BenefitsPage() {
     setFormDescription('')
     setFormCategory('prato')
     setFormOriginalPrice('')
-    setFormPromoType('')
+    setFormPromoType('leve2pague1')
     setFormPromoCustom('')
     setFormPhotoFile(null)
     setFormPhotoPreview(null)
-    setFormRuleSlots([{ days: [1, 2, 3, 4, 5], start: '11:00', end: '22:00' }])
+    setFormDayRules(defaultDayRules())
     setFormRuleLimit(20)
     setEditingId(null)
     setShowForm(false)
@@ -170,7 +177,7 @@ export default function BenefitsPage() {
       setFormPromoType('outro')
       setFormPromoCustom(benefit.promo_description)
     } else {
-      setFormPromoType('')
+      setFormPromoType('leve2pague1')
       setFormPromoCustom('')
     }
     setFormPhotoFile(null)
@@ -178,17 +185,21 @@ export default function BenefitsPage() {
     setEditingId(benefit.id)
 
     const rule = rulesMap[benefit.id]
+    const dr = defaultDayRules()
     if (rule) {
-      setFormRuleSlots([{
-        days: rule.available_days || [1, 2, 3, 4, 5],
-        start: rule.available_hours_start || '11:00',
-        end: rule.available_hours_end || '22:00',
-      }])
+      const activeDays = rule.available_days || []
+      for (let d = 0; d < 7; d++) {
+        dr[d] = {
+          enabled: activeDays.includes(d),
+          start: rule.available_hours_start || '11:00',
+          end: rule.available_hours_end || '22:00',
+        }
+      }
       setFormRuleLimit(rule.daily_limit || 20)
     } else {
-      setFormRuleSlots([{ days: [1, 2, 3, 4, 5], start: '11:00', end: '22:00' }])
       setFormRuleLimit(20)
     }
+    setFormDayRules(dr)
 
     setShowForm(true)
   }
@@ -244,9 +255,9 @@ export default function BenefitsPage() {
       return
     }
 
-    const hasValidSlot = formRuleSlots.some(s => s.days.length > 0)
-    if (!hasValidSlot) {
-      setMessage({ type: 'error', text: 'Selecione pelo menos 1 dia da semana em algum horario' })
+    const hasEnabledDay = Object.values(formDayRules).some(d => d.enabled)
+    if (!hasEnabledDay) {
+      setMessage({ type: 'error', text: 'Selecione pelo menos 1 dia da semana' })
       return
     }
 
@@ -256,9 +267,7 @@ export default function BenefitsPage() {
     const priceInCents = parsePriceToCents(formOriginalPrice)
     const promoDescription = formPromoType === 'leve2pague1'
       ? 'Leve 2, pague 1'
-      : formPromoType === 'outro'
-        ? formPromoCustom.trim() || null
-        : null
+      : formPromoCustom.trim() || 'Promocao personalizada'
 
     if (editingId) {
       // Update benefit
@@ -356,17 +365,22 @@ export default function BenefitsPage() {
   async function upsertRule(benefitId: string): Promise<string | null> {
     if (!restaurantId) return 'Restaurant ID ausente'
 
-    // Merge all slot days into one rule (DB stores 1 rule per benefit)
-    // Use first slot hours as primary, combine all days
-    const allDays = [...new Set(formRuleSlots.flatMap(s => s.days))].sort()
-    const primarySlot = formRuleSlots[0] || { start: '11:00', end: '22:00' }
+    // Build rule from per-day config
+    const enabledDays = Object.entries(formDayRules)
+      .filter(([, r]) => r.enabled)
+      .map(([d]) => Number(d))
+      .sort()
+    // Use first enabled day's hours as primary (DB stores 1 rule per benefit)
+    const firstEnabled = Object.entries(formDayRules).find(([, r]) => r.enabled)
+    const primaryStart = firstEnabled ? firstEnabled[1].start : '11:00'
+    const primaryEnd = firstEnabled ? firstEnabled[1].end : '22:00'
 
     const ruleData = {
       restaurant_id: restaurantId,
       benefit_id: benefitId,
-      available_days: allDays,
-      available_hours_start: primarySlot.start,
-      available_hours_end: primarySlot.end,
+      available_days: enabledDays,
+      available_hours_start: primaryStart,
+      available_hours_end: primaryEnd,
       daily_limit: formRuleLimit,
       is_active: true,
     }
@@ -552,18 +566,8 @@ export default function BenefitsPage() {
                 <p className="mt-1 text-xs text-neutral-400">O cliente ve o valor para entender o beneficio</p>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-neutral-700">Promocao</label>
+                <label className="mb-2 block text-sm font-medium text-neutral-700">Promocao *</label>
                 <div className="space-y-2">
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="promoType"
-                      checked={formPromoType === ''}
-                      onChange={() => { setFormPromoType(''); setFormPromoCustom('') }}
-                      className="h-4 w-4 accent-orange-600"
-                    />
-                    <span className="text-sm text-neutral-600">Sem promocao</span>
-                  </label>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
                       type="radio"
@@ -600,99 +604,91 @@ export default function BenefitsPage() {
               </div>
             </div>
 
-            {/* Availability Rules */}
+            {/* Availability Rules — Per Day */}
             <div className="rounded-lg border border-neutral-100 bg-neutral-50 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-neutral-800">Regras de Disponibilidade</h3>
-                {formRuleSlots.length < 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setFormRuleSlots([...formRuleSlots, { days: [0, 6], start: '11:00', end: '16:00' }])}
-                    className="text-xs font-medium text-orange-600 hover:text-orange-700"
-                  >
-                    + Adicionar horario
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const first = Object.values(formDayRules).find(d => d.enabled)
+                    if (!first) return
+                    const updated = { ...formDayRules }
+                    for (let d = 0; d < 7; d++) {
+                      updated[d] = { enabled: true, start: first.start, end: first.end }
+                    }
+                    setFormDayRules(updated)
+                  }}
+                  className="rounded-md bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-200"
+                >
+                  Mesmo horario para todos os dias
+                </button>
               </div>
 
-              <div className="space-y-4">
-                {formRuleSlots.map((slot, idx) => (
-                  <div key={idx} className="rounded-lg border border-neutral-200 bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs font-medium text-neutral-500">
-                        {idx === 0 ? 'Horario principal' : `Horario ${idx + 1}`}
+              <div className="space-y-2">
+                {WEEKDAYS.map((day) => {
+                  const rule = formDayRules[day.value]
+                  return (
+                    <div key={day.value} className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                      rule.enabled ? 'border-orange-200 bg-white' : 'border-neutral-200 bg-neutral-100 opacity-60'
+                    }`}>
+                      {/* Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...formDayRules }
+                          updated[day.value] = { ...rule, enabled: !rule.enabled }
+                          setFormDayRules(updated)
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                          rule.enabled ? 'bg-orange-600' : 'bg-neutral-300'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                          rule.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                        }`} />
+                      </button>
+
+                      {/* Day label */}
+                      <span className={`w-10 text-sm font-medium ${rule.enabled ? 'text-neutral-800' : 'text-neutral-400'}`}>
+                        {day.label}
                       </span>
-                      {formRuleSlots.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setFormRuleSlots(formRuleSlots.filter((_, i) => i !== idx))}
-                          className="text-xs text-red-500 hover:text-red-600"
-                        >
-                          Remover
-                        </button>
+
+                      {/* Time inputs */}
+                      {rule.enabled ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={rule.start}
+                            onChange={(e) => {
+                              const updated = { ...formDayRules }
+                              updated[day.value] = { ...rule, start: e.target.value }
+                              setFormDayRules(updated)
+                            }}
+                            className="h-7 rounded border border-neutral-300 px-2 text-xs focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          />
+                          <span className="text-xs text-neutral-400">ate</span>
+                          <input
+                            type="time"
+                            value={rule.end}
+                            onChange={(e) => {
+                              const updated = { ...formDayRules }
+                              updated[day.value] = { ...rule, end: e.target.value }
+                              setFormDayRules(updated)
+                            }}
+                            className="h-7 rounded border border-neutral-300 px-2 text-xs focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-neutral-400">Indisponivel</span>
                       )}
                     </div>
-
-                    {/* Days */}
-                    <div className="mb-3 flex flex-wrap gap-1.5">
-                      {WEEKDAYS.map((day) => (
-                        <button
-                          key={day.value}
-                          type="button"
-                          onClick={() => {
-                            const updated = [...formRuleSlots]
-                            const s = updated[idx]
-                            s.days = s.days.includes(day.value)
-                              ? s.days.filter((d) => d !== day.value)
-                              : [...s.days, day.value].sort()
-                            setFormRuleSlots(updated)
-                          }}
-                          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                            slot.days.includes(day.value)
-                              ? 'bg-orange-600 text-white'
-                              : 'border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50'
-                          }`}
-                        >
-                          {day.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Hours */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs text-neutral-500">Inicio</label>
-                        <input
-                          type="time"
-                          value={slot.start}
-                          onChange={(e) => {
-                            const updated = [...formRuleSlots]
-                            updated[idx].start = e.target.value
-                            setFormRuleSlots(updated)
-                          }}
-                          className="h-8 w-full rounded-md border border-neutral-300 px-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-neutral-500">Fim</label>
-                        <input
-                          type="time"
-                          value={slot.end}
-                          onChange={(e) => {
-                            const updated = [...formRuleSlots]
-                            updated[idx].end = e.target.value
-                            setFormRuleSlots(updated)
-                          }}
-                          className="h-8 w-full rounded-md border border-neutral-300 px-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Daily limit */}
-              <div className="mt-3">
+              <div className="mt-4">
                 <label className="mb-1 block text-xs font-medium text-neutral-600">Limite Diario de Cupons</label>
                 <input
                   type="number"
