@@ -47,7 +47,7 @@ export default function DashboardPage() {
     const { data } = await supabase
       .from('restaurants')
       .select('id')
-      .eq('owner_id', user.id)
+      .eq('admin_user_id', user.id)
       .single()
 
     if (data) {
