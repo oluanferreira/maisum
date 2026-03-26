@@ -270,7 +270,7 @@ export default function DashboardPage() {
                     <Tooltip
                       contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}
                       labelStyle={{ fontWeight: 600 }}
-                      formatter={(value: number) => [value, 'Assinantes']}
+                      formatter={(value) => [String(value), 'Assinantes']}
                     />
                     <Area type="monotone" dataKey="value" stroke="#1B998B" fill="url(#gradientSubs)" strokeWidth={2} name="Assinantes" />
                   </AreaChart>
@@ -295,7 +295,7 @@ export default function DashboardPage() {
                     <Tooltip
                       contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}
                       labelStyle={{ fontWeight: 600 }}
-                      formatter={(value: number) => [value, 'Cupons']}
+                      formatter={(value) => [String(value), 'Cupons']}
                     />
                     <Bar dataKey="value" fill="#FF6B35" radius={[4, 4, 0, 0]} name="Cupons" />
                   </BarChart>
