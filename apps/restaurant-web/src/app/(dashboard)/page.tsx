@@ -229,9 +229,11 @@ export default function DashboardPage() {
                       outerRadius={90}
                       dataKey="value"
                       nameKey="name"
-                      label={({ name, percent }) =>
-                        `${name.length > 12 ? name.slice(0, 12) + '...' : name} ${(percent * 100).toFixed(0)}%`
-                      }
+                      label={({ name, percent }: { name?: string; percent?: number }) => {
+                        const n = name || ''
+                        const p = percent || 0
+                        return `${n.length > 12 ? n.slice(0, 12) + '...' : n} ${(p * 100).toFixed(0)}%`
+                      }}
                       labelLine={{ stroke: '#9CA3AF' }}
                     >
                       {pieData.map((entry, i) => (
