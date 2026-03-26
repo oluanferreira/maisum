@@ -19,6 +19,7 @@ export type Database = {
           available_days: number[] | null
           available_hours_end: string | null
           available_hours_start: string | null
+          benefit_id: string | null
           created_at: string | null
           daily_limit: number | null
           id: string
@@ -29,6 +30,7 @@ export type Database = {
           available_days?: number[] | null
           available_hours_end?: string | null
           available_hours_start?: string | null
+          benefit_id?: string | null
           created_at?: string | null
           daily_limit?: number | null
           id?: string
@@ -39,6 +41,7 @@ export type Database = {
           available_days?: number[] | null
           available_hours_end?: string | null
           available_hours_start?: string | null
+          benefit_id?: string | null
           created_at?: string | null
           daily_limit?: number | null
           id?: string
@@ -46,6 +49,13 @@ export type Database = {
           restaurant_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "benefit_rules_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "benefits"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "benefit_rules_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -63,6 +73,9 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          original_price: number | null
+          photo_url: string | null
+          promo_description: string | null
           restaurant_id: string
         }
         Insert: {
@@ -72,6 +85,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
+          original_price?: number | null
+          photo_url?: string | null
+          promo_description?: string | null
           restaurant_id: string
         }
         Update: {
@@ -81,6 +97,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          original_price?: number | null
+          photo_url?: string | null
+          promo_description?: string | null
           restaurant_id?: string
         }
         Relationships: [

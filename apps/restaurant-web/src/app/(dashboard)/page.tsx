@@ -2,6 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/../lib/supabase/client'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts'
 
 interface Metrics {
   coupons_validated: number
@@ -19,6 +32,17 @@ interface TopBenefit {
 
 type Period = 7 | 30 | 90
 
+const CATEGORY_COLORS: Record<string, string> = {
+  prato: '#3B82F6',
+  drink: '#8B5CF6',
+  sobremesa: '#EC4899',
+  combo: '#F97316',
+}
+
+const PIE_COLORS = ['#FF6B35', '#1B998B', '#FFCB47', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#6366F1']
+
+const supabase = createClient()
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [topBenefits, setTopBenefits] = useState<TopBenefit[]>([])
@@ -26,22 +50,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
 
-  const supabase = createClient()
-
   useEffect(() => {
     loadRestaurantId()
   }, [])
 
   useEffect(() => {
-    if (restaurantId) {
-      loadMetrics()
-    }
+    if (restaurantId) loadMetrics()
   }, [restaurantId, period])
 
   async function loadRestaurantId() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { data } = await supabase
@@ -50,9 +68,7 @@ export default function DashboardPage() {
       .eq('admin_user_id', user.id)
       .single()
 
-    if (data) {
-      setRestaurantId(data.id)
-    }
+    if (data) setRestaurantId(data.id)
   }
 
   async function loadMetrics() {
@@ -64,11 +80,8 @@ export default function DashboardPage() {
       p_days: period,
     })
 
-    if (error) {
-      console.error('Erro ao carregar metricas:', error)
-    } else if (data) {
-      setMetrics(data as Metrics)
-    }
+    if (error) console.error('Erro ao carregar metricas:', error)
+    else if (data) setMetrics(data as Metrics)
 
     // Top benefits
     const { data: benefits } = await supabase
@@ -84,9 +97,7 @@ export default function DashboardPage() {
         const b = (item as unknown as { benefits: { name: string; category: string } | null }).benefits
         if (b) {
           const key = b.name
-          if (!benefitCount[key]) {
-            benefitCount[key] = { name: b.name, category: b.category, count: 0 }
-          }
+          if (!benefitCount[key]) benefitCount[key] = { name: b.name, category: b.category, count: 0 }
           benefitCount[key].count++
         }
       }
@@ -110,11 +121,7 @@ export default function DashboardPage() {
     ? [
         { title: 'Cupons Validados', value: metrics.coupons_validated, color: 'orange' },
         { title: 'Clientes Unicos', value: metrics.unique_customers, color: 'teal' },
-        {
-          title: 'Nota Media',
-          value: metrics.avg_rating > 0 ? metrics.avg_rating.toFixed(1) : '—',
-          color: 'yellow',
-        },
+        { title: 'Nota Media', value: metrics.avg_rating > 0 ? metrics.avg_rating.toFixed(1) : '—', color: 'yellow' },
         { title: 'Total Avaliacoes', value: metrics.total_reviews, color: 'blue' },
       ]
     : []
@@ -126,6 +133,19 @@ export default function DashboardPage() {
     blue: 'bg-blue-50 border-blue-200 text-blue-700',
   }
 
+  // Format daily_coupons for chart
+  const dailyChartData = (metrics?.daily_coupons || []).map((d) => ({
+    date: new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    cupons: d.count,
+  }))
+
+  // Format top benefits for pie chart
+  const pieData = topBenefits.map((b) => ({
+    name: b.benefit_name,
+    value: b.count,
+    category: b.category,
+  }))
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -134,8 +154,6 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-neutral-900">Dashboard</h1>
           <p className="text-neutral-600">Metricas do seu restaurante</p>
         </div>
-
-        {/* Period Selector */}
         <div className="flex gap-2">
           {periods.map((p) => (
             <button
@@ -154,7 +172,9 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-neutral-500">Carregando metricas...</div>
+        <div className="flex items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-200 border-t-orange-600" />
+        </div>
       ) : (
         <>
           {/* Metric Cards */}
@@ -170,45 +190,72 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Chart Placeholder */}
-          <div className="rounded-xl border border-neutral-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-neutral-900">Cupons por dia</h2>
-            {metrics?.daily_coupons && metrics.daily_coupons.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                {metrics.daily_coupons.map((day) => (
-                  <div key={day.date} className="flex items-center gap-3">
-                    <span className="w-24 text-sm text-neutral-600">
-                      {new Date(day.date).toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                      })}
-                    </span>
-                    <div className="flex-1">
-                      <div
-                        className="h-6 rounded bg-orange-400"
-                        style={{
-                          width: `${Math.max(
-                            5,
-                            (day.count / Math.max(...metrics.daily_coupons!.map((d) => d.count))) * 100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="w-8 text-right text-sm font-medium text-neutral-700">
-                      {day.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-neutral-500">Nenhum dado no periodo selecionado.</p>
-            )}
+          {/* Charts Row */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Daily Coupons Bar Chart */}
+            <div className="rounded-xl border border-neutral-200 bg-white p-6">
+              <h2 className="mb-4 text-lg font-semibold text-neutral-900">Cupons por Dia</h2>
+              {dailyChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={dailyChartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B7280' }} />
+                    <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}
+                      labelStyle={{ fontWeight: 600 }}
+                    />
+                    <Bar dataKey="cupons" fill="#FF6B35" radius={[4, 4, 0, 0]} name="Cupons" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-[260px] items-center justify-center text-sm text-neutral-400">
+                  Nenhum dado no periodo selecionado
+                </div>
+              )}
+            </div>
+
+            {/* Top Benefits Pie Chart */}
+            <div className="rounded-xl border border-neutral-200 bg-white p-6">
+              <h2 className="mb-4 text-lg font-semibold text-neutral-900">Beneficios Mais Resgatados</h2>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={90}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) =>
+                        `${name.length > 12 ? name.slice(0, 12) + '...' : name} ${(percent * 100).toFixed(0)}%`
+                      }
+                      labelLine={{ stroke: '#9CA3AF' }}
+                    >
+                      {pieData.map((entry, i) => (
+                        <Cell key={entry.name} fill={CATEGORY_COLORS[entry.category] || PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}
+                      formatter={(value: number) => [`${value}x`, 'Resgates']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-[260px] items-center justify-center text-sm text-neutral-400">
+                  Nenhum resgate registrado ainda
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Top Benefits */}
+          {/* Top Benefits List */}
           {topBenefits.length > 0 && (
             <div className="rounded-xl border border-neutral-200 bg-white p-6">
-              <h2 className="text-lg font-semibold text-neutral-900">Beneficios mais resgatados</h2>
+              <h2 className="text-lg font-semibold text-neutral-900">Ranking de Beneficios</h2>
               <div className="mt-4 space-y-3">
                 {topBenefits.map((benefit, index) => (
                   <div key={benefit.benefit_name} className="flex items-center gap-4">

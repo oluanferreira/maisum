@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/../lib/supabase/client'
 
 type BenefitCategory = 'prato' | 'drink' | 'sobremesa' | 'combo'
@@ -11,12 +11,16 @@ interface Benefit {
   name: string
   description: string | null
   category: BenefitCategory
+  photo_url: string | null
+  original_price: number | null
+  promo_description: string | null
   is_active: boolean
 }
 
 interface BenefitRule {
   id: string
   restaurant_id: string
+  benefit_id: string | null
   available_days: number[]
   available_hours_start: string
   available_hours_end: string
@@ -48,33 +52,46 @@ const WEEKDAYS = [
   { value: 6, label: 'Sab' },
 ]
 
+function formatPrice(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
+}
+
+function formatDaysSummary(days: number[]): string {
+  if (days.length === 7) return 'Todos os dias'
+  if (days.length === 0) return 'Nenhum dia'
+  return days.map((d) => WEEKDAYS[d]?.label).join(', ')
+}
+
+const supabase = createClient()
+
 export default function BenefitsPage() {
   const [benefits, setBenefits] = useState<Benefit[]>([])
-  const [rule, setRule] = useState<BenefitRule | null>(null)
+  const [rulesMap, setRulesMap] = useState<Record<string, BenefitRule>>({})
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // New benefit form
+  // Form state
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formCategory, setFormCategory] = useState<BenefitCategory>('prato')
-  const [savingBenefit, setSavingBenefit] = useState(false)
+  const [formOriginalPrice, setFormOriginalPrice] = useState('')
+  const [formPromoDescription, setFormPromoDescription] = useState('')
+  const [formPhotoFile, setFormPhotoFile] = useState<File | null>(null)
+  const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Rules form
-  const [ruleDays, setRuleDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6])
-  const [ruleStart, setRuleStart] = useState('00:00')
-  const [ruleEnd, setRuleEnd] = useState('23:59')
-  const [ruleLimit, setRuleLimit] = useState(50)
-  const [ruleActive, setRuleActive] = useState(true)
-  const [savingRule, setSavingRule] = useState(false)
+  // Per-benefit rules form
+  const [formRuleDays, setFormRuleDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6])
+  const [formRuleStart, setFormRuleStart] = useState('11:00')
+  const [formRuleEnd, setFormRuleEnd] = useState('22:00')
+  const [formRuleLimit, setFormRuleLimit] = useState(20)
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  const supabase = createClient()
 
   useEffect(() => {
     loadData()
@@ -84,26 +101,18 @@ export default function BenefitsPage() {
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) { setLoading(false); return }
 
-    // Get restaurant ID
     const { data: restaurant } = await supabase
       .from('restaurants')
       .select('id')
       .eq('admin_user_id', user.id)
       .single()
 
-    if (!restaurant) {
-      setLoading(false)
-      return
-    }
+    if (!restaurant) { setLoading(false); return }
 
     setRestaurantId(restaurant.id)
 
-    // Load benefits and rules in parallel
     const [benefitsRes, rulesRes] = await Promise.all([
       supabase
         .from('benefits')
@@ -113,19 +122,19 @@ export default function BenefitsPage() {
       supabase
         .from('benefit_rules')
         .select('*')
-        .eq('restaurant_id', restaurant.id)
-        .single(),
+        .eq('restaurant_id', restaurant.id),
     ])
 
     if (benefitsRes.data) setBenefits(benefitsRes.data)
 
     if (rulesRes.data) {
-      setRule(rulesRes.data)
-      setRuleDays(rulesRes.data.available_days || [0, 1, 2, 3, 4, 5, 6])
-      setRuleStart(rulesRes.data.available_hours_start || '00:00')
-      setRuleEnd(rulesRes.data.available_hours_end || '23:59')
-      setRuleLimit(rulesRes.data.daily_limit || 50)
-      setRuleActive(rulesRes.data.is_active ?? true)
+      const map: Record<string, BenefitRule> = {}
+      for (const rule of rulesRes.data) {
+        if (rule.benefit_id) {
+          map[rule.benefit_id] = rule
+        }
+      }
+      setRulesMap(map)
     }
 
     setLoading(false)
@@ -135,152 +144,257 @@ export default function BenefitsPage() {
     setFormName('')
     setFormDescription('')
     setFormCategory('prato')
+    setFormOriginalPrice('')
+    setFormPromoDescription('')
+    setFormPhotoFile(null)
+    setFormPhotoPreview(null)
+    setFormRuleDays([0, 1, 2, 3, 4, 5, 6])
+    setFormRuleStart('11:00')
+    setFormRuleEnd('22:00')
+    setFormRuleLimit(20)
     setEditingId(null)
     setShowForm(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   function startEdit(benefit: Benefit) {
     setFormName(benefit.name)
     setFormDescription(benefit.description || '')
     setFormCategory(benefit.category)
+    setFormOriginalPrice(benefit.original_price ? (benefit.original_price / 100).toFixed(2).replace('.', ',') : '')
+    setFormPromoDescription(benefit.promo_description || '')
+    setFormPhotoFile(null)
+    setFormPhotoPreview(benefit.photo_url)
     setEditingId(benefit.id)
+
+    const rule = rulesMap[benefit.id]
+    if (rule) {
+      setFormRuleDays(rule.available_days || [0, 1, 2, 3, 4, 5, 6])
+      setFormRuleStart(rule.available_hours_start || '11:00')
+      setFormRuleEnd(rule.available_hours_end || '22:00')
+      setFormRuleLimit(rule.daily_limit || 20)
+    } else {
+      setFormRuleDays([0, 1, 2, 3, 4, 5, 6])
+      setFormRuleStart('11:00')
+      setFormRuleEnd('22:00')
+      setFormRuleLimit(20)
+    }
+
     setShowForm(true)
   }
 
-  async function handleSaveBenefit(e: React.FormEvent) {
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Imagem deve ter no maximo 5MB' })
+      return
+    }
+
+    setFormPhotoFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setFormPhotoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  function parsePriceToCents(value: string): number | null {
+    if (!value.trim()) return null
+    const cleaned = value.replace(/[R$\s]/g, '').replace(',', '.')
+    const num = parseFloat(cleaned)
+    if (isNaN(num)) return null
+    return Math.round(num * 100)
+  }
+
+  async function uploadPhoto(benefitId: string): Promise<string | null> {
+    if (!formPhotoFile) return null
+
+    const ext = formPhotoFile.name.split('.').pop() || 'jpg'
+    const filePath = `benefits/${benefitId}/${Date.now()}.${ext}`
+
+    const { error } = await supabase.storage
+      .from('restaurant-photos')
+      .upload(filePath, formPhotoFile, { upsert: true })
+
+    if (error) {
+      console.error('Upload error:', error)
+      return null
+    }
+
+    const { data } = supabase.storage.from('restaurant-photos').getPublicUrl(filePath)
+    return data.publicUrl
+  }
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!restaurantId) return
 
     if (!formName.trim()) {
-      setMessage({ type: 'error', text: 'Nome do beneficio e obrigatorio' })
+      setMessage({ type: 'error', text: 'Nome do prato e obrigatorio' })
       return
     }
 
-    setSavingBenefit(true)
+    if (formRuleDays.length === 0) {
+      setMessage({ type: 'error', text: 'Selecione pelo menos 1 dia da semana' })
+      return
+    }
+
+    setSaving(true)
     setMessage(null)
 
+    const priceInCents = parsePriceToCents(formOriginalPrice)
+
     if (editingId) {
-      // Update
-      const { error } = await supabase
-        .from('benefits')
-        .update({
-          name: formName.trim(),
-          description: formDescription.trim() || null,
-          category: formCategory,
-        })
-        .eq('id', editingId)
+      // Update benefit
+      const updateData: Record<string, unknown> = {
+        name: formName.trim(),
+        description: formDescription.trim() || null,
+        category: formCategory,
+        original_price: priceInCents,
+        promo_description: formPromoDescription.trim() || null,
+      }
+
+      if (formPhotoFile) {
+        const photoUrl = await uploadPhoto(editingId)
+        if (photoUrl) {
+          updateData.photo_url = photoUrl
+        } else {
+          setMessage({ type: 'error', text: 'Erro ao enviar foto. Tente novamente.' })
+          setSaving(false)
+          return
+        }
+      }
+
+      const { error } = await supabase.from('benefits').update(updateData).eq('id', editingId)
 
       if (error) {
         setMessage({ type: 'error', text: `Erro ao atualizar: ${error.message}` })
-      } else {
-        setMessage({ type: 'success', text: 'Beneficio atualizado!' })
+        setSaving(false)
+        return
+      }
+
+      // Upsert rule
+      const ruleError = await upsertRule(editingId)
+      if (ruleError) {
+        setMessage({ type: 'error', text: `Prato atualizado, mas erro nas regras: ${ruleError}` })
         resetForm()
         await loadData()
+        setSaving(false)
+        return
       }
+
+      setMessage({ type: 'success', text: 'Prato atualizado!' })
     } else {
-      // Insert
-      const { error } = await supabase
+      // Insert benefit
+      const { data: newBenefit, error } = await supabase
         .from('benefits')
         .insert({
           restaurant_id: restaurantId,
           name: formName.trim(),
           description: formDescription.trim() || null,
           category: formCategory,
+          original_price: priceInCents,
+          promo_description: formPromoDescription.trim() || null,
         })
+        .select('id')
+        .single()
 
-      if (error) {
-        setMessage({ type: 'error', text: `Erro ao criar: ${error.message}` })
-      } else {
-        setMessage({ type: 'success', text: 'Beneficio adicionado!' })
+      if (error || !newBenefit) {
+        setMessage({ type: 'error', text: `Erro ao criar: ${error?.message}` })
+        setSaving(false)
+        return
+      }
+
+      // Upload photo
+      if (formPhotoFile) {
+        const photoUrl = await uploadPhoto(newBenefit.id)
+        if (photoUrl) {
+          await supabase.from('benefits').update({ photo_url: photoUrl }).eq('id', newBenefit.id)
+        } else {
+          setMessage({ type: 'error', text: 'Prato criado, mas a foto nao foi enviada. Edite para tentar novamente.' })
+          resetForm()
+          await loadData()
+          setSaving(false)
+          return
+        }
+      }
+
+      // Create rule
+      const ruleError = await upsertRule(newBenefit.id)
+      if (ruleError) {
+        setMessage({ type: 'error', text: `Prato criado, mas erro nas regras: ${ruleError}` })
         resetForm()
         await loadData()
+        setSaving(false)
+        return
       }
+
+      setMessage({ type: 'success', text: 'Prato adicionado!' })
     }
 
-    setSavingBenefit(false)
+    resetForm()
+    await loadData()
+    setSaving(false)
+  }
+
+  async function upsertRule(benefitId: string): Promise<string | null> {
+    if (!restaurantId) return 'Restaurant ID ausente'
+
+    const ruleData = {
+      restaurant_id: restaurantId,
+      benefit_id: benefitId,
+      available_days: formRuleDays,
+      available_hours_start: formRuleStart,
+      available_hours_end: formRuleEnd,
+      daily_limit: formRuleLimit,
+      is_active: true,
+    }
+
+    const existingRule = rulesMap[benefitId]
+    if (existingRule) {
+      const { error } = await supabase.from('benefit_rules').update(ruleData).eq('id', existingRule.id)
+      if (error) return error.message
+    } else {
+      const { error } = await supabase.from('benefit_rules').insert(ruleData)
+      if (error) return error.message
+    }
+    return null
   }
 
   async function toggleBenefit(id: string, currentActive: boolean) {
-    const { error } = await supabase
-      .from('benefits')
-      .update({ is_active: !currentActive })
-      .eq('id', id)
-
+    const { error } = await supabase.from('benefits').update({ is_active: !currentActive }).eq('id', id)
     if (error) {
-      setMessage({ type: 'error', text: `Erro ao atualizar status: ${error.message}` })
+      setMessage({ type: 'error', text: `Erro: ${error.message}` })
       return
     }
-
-    setBenefits((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, is_active: !currentActive } : b))
-    )
+    setBenefits((prev) => prev.map((b) => (b.id === id ? { ...b, is_active: !currentActive } : b)))
   }
 
   async function deleteBenefit(id: string) {
-    const { error } = await supabase.from('benefits').delete().eq('id', id)
+    // Clean up photo from Storage if exists
+    const benefit = benefits.find((b) => b.id === id)
+    if (benefit?.photo_url) {
+      const url = benefit.photo_url
+      const match = url.match(/restaurant-photos\/(.+)$/)
+      if (match) {
+        await supabase.storage.from('restaurant-photos').remove([match[1]])
+      }
+    }
 
+    const { error } = await supabase.from('benefits').delete().eq('id', id)
     if (error) {
       setMessage({ type: 'error', text: `Erro ao deletar: ${error.message}` })
     } else {
       setBenefits((prev) => prev.filter((b) => b.id !== id))
-      setMessage({ type: 'success', text: 'Beneficio removido!' })
+      setMessage({ type: 'success', text: 'Prato removido!' })
     }
-
     setDeletingId(null)
   }
 
   function toggleDay(day: number) {
-    setRuleDays((prev) =>
+    setFormRuleDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()
     )
-  }
-
-  async function handleSaveRules() {
-    if (!restaurantId) return
-
-    setSavingRule(true)
-    setMessage(null)
-
-    if (ruleDays.length === 0) {
-      setMessage({ type: 'error', text: 'Selecione pelo menos 1 dia da semana' })
-      setSavingRule(false)
-      return
-    }
-
-    const ruleData = {
-      restaurant_id: restaurantId,
-      available_days: ruleDays,
-      available_hours_start: ruleStart,
-      available_hours_end: ruleEnd,
-      daily_limit: ruleLimit,
-      is_active: ruleActive,
-    }
-
-    if (rule) {
-      const { error } = await supabase
-        .from('benefit_rules')
-        .update(ruleData)
-        .eq('id', rule.id)
-
-      if (error) {
-        setMessage({ type: 'error', text: `Erro ao salvar regras: ${error.message}` })
-      } else {
-        setMessage({ type: 'success', text: 'Regras atualizadas!' })
-      }
-    } else {
-      const { error } = await supabase
-        .from('benefit_rules')
-        .insert(ruleData)
-
-      if (error) {
-        setMessage({ type: 'error', text: `Erro ao criar regras: ${error.message}` })
-      } else {
-        setMessage({ type: 'success', text: 'Regras criadas!' })
-        await loadData()
-      }
-    }
-
-    setSavingRule(false)
   }
 
   if (loading) {
@@ -304,62 +418,84 @@ export default function BenefitsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Beneficios</h1>
-          <p className="text-neutral-600">Configure os itens do +um para seus clientes</p>
+          <h1 className="text-2xl font-bold text-neutral-900">Cardapio +um</h1>
+          <p className="text-neutral-600">Cadastre os pratos e configure as regras de cada promocao</p>
         </div>
         {!showForm && (
           <button
-            onClick={() => {
-              resetForm()
-              setShowForm(true)
-            }}
+            onClick={() => { resetForm(); setShowForm(true) }}
             className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
           >
-            Adicionar Beneficio
+            + Novo Prato
           </button>
         )}
       </div>
 
       {/* Message */}
       {message && (
-        <div
-          className={`rounded-lg px-4 py-3 text-sm ${
-            message.type === 'success'
-              ? 'border border-green-200 bg-green-50 text-green-800'
-              : 'border border-red-200 bg-red-50 text-red-800'
-          }`}
-        >
+        <div className={`rounded-lg px-4 py-3 text-sm ${
+          message.type === 'success'
+            ? 'border border-green-200 bg-green-50 text-green-800'
+            : 'border border-red-200 bg-red-50 text-red-800'
+        }`}>
           {message.text}
         </div>
       )}
 
-      {/* Paused Banner */}
-      {rule && !rule.is_active && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          Seus beneficios estao temporariamente pausados. Ative nas Regras de Disponibilidade abaixo.
-        </div>
-      )}
-
-      {/* Inline Form */}
+      {/* Form — Create / Edit */}
       {showForm && (
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-neutral-800">
-            {editingId ? 'Editar Beneficio' : 'Novo Beneficio'}
+            {editingId ? 'Editar Prato' : 'Novo Prato'}
           </h2>
 
-          <form onSubmit={handleSaveBenefit} className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-6">
+            {/* Photo Upload */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-neutral-700">Foto do Prato</label>
+              <div className="flex items-center gap-4">
+                {formPhotoPreview ? (
+                  <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-200">
+                    <img src={formPhotoPreview} alt="Preview" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => { setFormPhotoFile(null); setFormPhotoPreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white"
+                    >
+                      x
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:text-orange-500"
+                  >
+                    <span className="text-2xl">+</span>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                <p className="text-xs text-neutral-500">JPG, PNG ou WebP. Max 5MB.</p>
+              </div>
+            </div>
+
+            {/* Name + Category */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Nome *</label>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Nome do Prato *</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Ex: Sobremesa do Dia"
+                  placeholder="Ex: Picanha na Brasa"
                   className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
               </div>
-
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Categoria *</label>
                 <select
@@ -368,32 +504,116 @@ export default function BenefitsPage() {
                   className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
+                    <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
                 </select>
               </div>
+            </div>
 
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Descricao</label>
-                <textarea
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  rows={2}
-                  placeholder="Descricao do beneficio..."
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            {/* Description */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">Descricao</label>
+              <textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                rows={2}
+                placeholder="Descreva o prato..."
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+
+            {/* Price + Promo */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Preco Original</label>
+                <input
+                  type="text"
+                  value={formOriginalPrice}
+                  onChange={(e) => setFormOriginalPrice(e.target.value)}
+                  placeholder="Ex: 45,90"
+                  className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+                <p className="mt-1 text-xs text-neutral-400">O cliente ve o valor para entender o beneficio</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Promocao</label>
+                <input
+                  type="text"
+                  value={formPromoDescription}
+                  onChange={(e) => setFormPromoDescription(e.target.value)}
+                  placeholder="Ex: Leve 2, pague 1"
+                  className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
               </div>
             </div>
 
+            {/* Availability Rules */}
+            <div className="rounded-lg border border-neutral-100 bg-neutral-50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-neutral-800">Regras de Disponibilidade</h3>
+
+              {/* Days */}
+              <div className="mb-4">
+                <label className="mb-2 block text-xs font-medium text-neutral-600">Dias da Semana</label>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAYS.map((day) => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleDay(day.value)}
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                        formRuleDays.includes(day.value)
+                          ? 'bg-orange-600 text-white'
+                          : 'border border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hours + Limit */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-600">Horario Inicio</label>
+                  <input
+                    type="time"
+                    value={formRuleStart}
+                    onChange={(e) => setFormRuleStart(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-600">Horario Fim</label>
+                  <input
+                    type="time"
+                    value={formRuleEnd}
+                    onChange={(e) => setFormRuleEnd(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-600">Limite Diario</label>
+                  <input
+                    type="number"
+                    value={formRuleLimit}
+                    onChange={(e) => setFormRuleLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                    min={1}
+                    max={999}
+                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Buttons */}
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={savingBenefit}
+                disabled={saving}
                 className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
               >
-                {savingBenefit ? 'Salvando...' : editingId ? 'Atualizar' : 'Adicionar'}
+                {saving ? 'Salvando...' : editingId ? 'Atualizar' : 'Adicionar'}
               </button>
               <button
                 type="button"
@@ -410,191 +630,123 @@ export default function BenefitsPage() {
       {/* Benefits Cards */}
       {benefits.length === 0 ? (
         <div className="rounded-lg border border-neutral-200 bg-white px-6 py-12 text-center shadow-sm">
-          <p className="text-neutral-500">Nenhum beneficio cadastrado ainda.</p>
+          <p className="text-lg text-neutral-500">Nenhum prato cadastrado ainda</p>
           <p className="mt-1 text-sm text-neutral-400">
-            Clique em &quot;Adicionar Beneficio&quot; para comecar.
+            Clique em &quot;+ Novo Prato&quot; para comecar a montar seu cardapio +um.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {benefits.map((benefit) => (
-            <div
-              key={benefit.id}
-              className={`rounded-lg border bg-white p-4 shadow-sm transition-opacity ${
-                benefit.is_active ? 'border-neutral-200' : 'border-neutral-100 opacity-60'
-              }`}
-            >
-              <div className="mb-3 flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold text-neutral-900">{benefit.name}</h3>
-                  {benefit.description && (
-                    <p className="mt-1 text-sm text-neutral-500">{benefit.description}</p>
-                  )}
-                </div>
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                    CATEGORY_COLORS[benefit.category]
-                  }`}
-                >
-                  {CATEGORIES.find((c) => c.value === benefit.category)?.label}
-                </span>
-              </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {benefits.map((benefit) => {
+            const rule = rulesMap[benefit.id]
+            return (
+              <div
+                key={benefit.id}
+                className={`overflow-hidden rounded-lg border bg-white shadow-sm transition-opacity ${
+                  benefit.is_active ? 'border-neutral-200' : 'border-neutral-100 opacity-60'
+                }`}
+              >
+                {/* Photo */}
+                {benefit.photo_url ? (
+                  <div className="h-40 w-full overflow-hidden bg-neutral-100">
+                    <img src={benefit.photo_url} alt={benefit.name} className="h-full w-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex h-28 w-full items-center justify-center bg-neutral-100">
+                    <span className="text-3xl">
+                      {benefit.category === 'prato' ? '🍽️' : benefit.category === 'drink' ? '🥤' : benefit.category === 'sobremesa' ? '🍰' : '🎁'}
+                    </span>
+                  </div>
+                )}
 
-              <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
-                {/* Toggle */}
-                <button
-                  onClick={() => toggleBenefit(benefit.id, benefit.is_active)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    benefit.is_active ? 'bg-orange-600' : 'bg-neutral-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      benefit.is_active ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => startEdit(benefit)}
-                    className="rounded px-2 py-1 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100"
-                  >
-                    Editar
-                  </button>
-
-                  {deletingId === benefit.id ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => deleteBenefit(benefit.id)}
-                        className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                      >
-                        Confirmar
-                      </button>
-                      <button
-                        onClick={() => setDeletingId(null)}
-                        className="rounded px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100"
-                      >
-                        Cancelar
-                      </button>
+                {/* Content */}
+                <div className="p-4">
+                  <div className="mb-2 flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-neutral-900">{benefit.name}</h3>
+                      {benefit.description && (
+                        <p className="mt-0.5 text-sm text-neutral-500 line-clamp-2">{benefit.description}</p>
+                      )}
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => setDeletingId(benefit.id)}
-                      className="rounded px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
-                    >
-                      Excluir
-                    </button>
+                    <span className={`ml-2 inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[benefit.category]}`}>
+                      {CATEGORIES.find((c) => c.value === benefit.category)?.label}
+                    </span>
+                  </div>
+
+                  {/* Price + Promo */}
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    {benefit.original_price && (
+                      <span className="text-sm font-semibold text-orange-600">{formatPrice(benefit.original_price)}</span>
+                    )}
+                    {benefit.promo_description && (
+                      <span className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                        {benefit.promo_description}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Rules Summary */}
+                  {rule && (
+                    <div className="mb-3 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+                      <span className="font-medium">{formatDaysSummary(rule.available_days)}</span>
+                      {' · '}
+                      {rule.available_hours_start?.substring(0, 5)} - {rule.available_hours_end?.substring(0, 5)}
+                      {' · '}
+                      Max {rule.daily_limit}/dia
+                    </div>
                   )}
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
+                    <button
+                      onClick={() => toggleBenefit(benefit.id, benefit.is_active)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        benefit.is_active ? 'bg-orange-600' : 'bg-neutral-300'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        benefit.is_active ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => startEdit(benefit)}
+                        className="rounded px-2 py-1 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100"
+                      >
+                        Editar
+                      </button>
+                      {deletingId === benefit.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => deleteBenefit(benefit.id)}
+                            className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            onClick={() => setDeletingId(null)}
+                            className="rounded px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100"
+                          >
+                            Nao
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeletingId(benefit.id)}
+                          className="rounded px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
+                        >
+                          Excluir
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
-
-      {/* Availability Rules */}
-      <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-800">Regras de Disponibilidade</h2>
-
-          {/* Global Toggle */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-neutral-600">
-              {ruleActive ? 'Ativo' : 'Pausado'}
-            </span>
-            <button
-              onClick={() => setRuleActive(!ruleActive)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                ruleActive ? 'bg-orange-600' : 'bg-neutral-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  ruleActive ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {/* Days of week */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-neutral-700">
-              Dias da Semana
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {WEEKDAYS.map((day) => (
-                <button
-                  key={day.value}
-                  type="button"
-                  onClick={() => toggleDay(day.value)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                    ruleDays.includes(day.value)
-                      ? 'bg-orange-600 text-white'
-                      : 'border border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50'
-                  }`}
-                >
-                  {day.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Hours */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Horario Inicio
-              </label>
-              <input
-                type="time"
-                value={ruleStart}
-                onChange={(e) => setRuleStart(e.target.value)}
-                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Horario Fim
-              </label>
-              <input
-                type="time"
-                value={ruleEnd}
-                onChange={(e) => setRuleEnd(e.target.value)}
-                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-            </div>
-          </div>
-
-          {/* Daily limit */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">
-              Limite Diario de Cupons
-            </label>
-            <input
-              type="number"
-              value={ruleLimit}
-              onChange={(e) => setRuleLimit(Math.max(1, parseInt(e.target.value) || 1))}
-              min={1}
-              max={999}
-              className="h-10 w-32 rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-            />
-          </div>
-
-          {/* Save rules */}
-          <div className="flex justify-end border-t border-neutral-100 pt-4">
-            <button
-              onClick={handleSaveRules}
-              disabled={savingRule}
-              className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
-            >
-              {savingRule ? 'Salvando...' : 'Salvar Regras'}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
