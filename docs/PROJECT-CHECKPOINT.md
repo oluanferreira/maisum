@@ -1,14 +1,14 @@
 # PROJECT CHECKPOINT — +um (MAISUM)
 
-> Ultima atualizacao: 2026-03-25
+> Ultima atualizacao: 2026-03-26
 
 ## Status Geral
 
 | Item | Status |
 |------|--------|
 | **Workflow** | Greenfield Full-Stack |
-| **Phase atual** | Phase 3 iniciando — infra conectada, pronto para dev |
-| **Step atual** | 29 stories scaffolded (~65% code). Supabase Cloud conectado. Placeholders restantes. |
+| **Phase atual** | Phase 3 DONE — Integration + Deploy LIVE |
+| **Step atual** | 13 commits sessao. Admin + Restaurant webs live. AbacatePay + OAuth + Push integrados. Pre-launch. |
 
 ## Documentos do Projeto
 
