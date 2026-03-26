@@ -3,14 +3,18 @@ import * as Device from 'expo-device'
 import { Platform } from 'react-native'
 import { supabase } from './supabase'
 
-// Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-})
+// Configure notification handler (safe init — no crash if native module fails)
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  })
+} catch (err) {
+  console.warn('[Push] Failed to set notification handler:', err)
+}
 
 export async function registerForPushNotifications(): Promise<string | null> {
   if (!Device.isDevice) {
@@ -33,7 +37,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   // Get Expo push token
   const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: 'bc52710e-b6db-478e-9b03-f7431b176b42', // from app.json extra.eas.projectId
+    projectId: 'b835eb99-de01-4ad3-97f7-bab7ecb3982e', // Luan's Expo account
   })
   const token = tokenData.data
 
