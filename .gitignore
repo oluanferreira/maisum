@@ -53,3 +53,5 @@ Thumbs.db
 .lmas-core/local/
 .claude/settings.local.json
 .lmas/install-log.txt
+
+.vercel
