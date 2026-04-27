@@ -8,7 +8,6 @@ import {
   QrCode,
   ChatCircle,
   Star,
-  Camera,
   UserCircle,
   SignOut,
 } from '@phosphor-icons/react'
@@ -20,7 +19,6 @@ const navItems = [
   { href: '/validate', label: 'Validar Cupom', icon: QrCode },
   { href: '/chat', label: 'Chat', icon: ChatCircle },
   { href: '/reviews', label: 'Avaliacoes', icon: Star },
-  { href: '/social-proofs', label: 'Posts Sociais', icon: Camera },
   { href: '/profile', label: 'Perfil', icon: UserCircle },
 ]
 
