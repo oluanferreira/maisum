@@ -396,13 +396,10 @@ export default function ProfilePage() {
     setMessage({ type: 'success', text: 'Logomarca removida.' })
   }
 
+  // MAISUM-RW-1.15 AC-1 — single hero photo upload. Sobrescreve photos[0] (single-element
+  // array preserves text[] schema · backward-compat · consumidores no maisum-app usam ?.[0]).
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (!restaurant || !e.target.files || e.target.files.length === 0) return
-
-    if (photos.length >= 5) {
-      setMessage({ type: 'error', text: 'Maximo de 5 fotos atingido' })
-      return
-    }
 
     const file = e.target.files[0]
     const fileExt = file.name.split('.').pop()
@@ -425,16 +422,20 @@ export default function ProfilePage() {
       .from('restaurant-photos')
       .getPublicUrl(fileName)
 
-    setPhotos((prev) => [...prev, urlData.publicUrl])
+    // Sobrescreve (single-element array) em vez de append. Cache-buster query param
+    // preserva immediate refresh do preview no profile (mesma técnica RW-1.12 logo).
+    const publicUrl = `${urlData.publicUrl}?v=${Date.now()}`
+    setPhotos([publicUrl])
     setUploading(false)
-    setMessage({ type: 'success', text: 'Foto adicionada! Clique em Salvar para confirmar.' })
+    setMessage({ type: 'success', text: 'Foto principal atualizada! Clique em Salvar para confirmar.' })
 
     // Reset input
     e.target.value = ''
   }
 
-  function removePhoto(index: number) {
-    setPhotos((prev) => prev.filter((_, i) => i !== index))
+  function removePhoto() {
+    // MAISUM-RW-1.15 AC-1 — remove single hero photo (clear array preserves text[] schema).
+    setPhotos([])
     setMessage({ type: 'success', text: 'Foto removida. Clique em Salvar para confirmar.' })
   }
 
@@ -786,42 +787,46 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Photos */}
+        {/* Photos · MAISUM-RW-1.15 AC-1: single hero photo 16:9 (era 5 slots aspect-square)
+            Schema preserved: photos text[] continua array · UI mostra/edita só photos[0].
+            Aspect ratio 16:9 via CSS · sem crop forçado (TD-MAISUM-RW-1.15-PHOTO-CROP LOW). */}
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-neutral-800">
-            Fotos ({photos.length}/5)
+          <h2 className="mb-2 text-lg font-semibold text-neutral-800">
+            Foto Principal
           </h2>
+          <p className="mb-4 text-xs text-neutral-500">
+            Foto horizontal 16:9 que aparece na lista de restaurantes e no topo do seu perfil.
+          </p>
 
-          {/* Photo Grid */}
-          {photos.length > 0 && (
-            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
-              {photos.map((url, index) => (
-                <div key={index} className="group relative aspect-square overflow-hidden rounded-lg border border-neutral-200">
-                  <img
-                    src={url}
-                    alt={`Foto ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(index)}
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    X
-                  </button>
-                  {index === 0 && (
-                    <span className="absolute bottom-1 left-1 rounded bg-orange-600 px-1.5 py-0.5 text-xs font-medium text-white">
-                      Principal
-                    </span>
-                  )}
-                </div>
-              ))}
+          {/* Single hero photo preview · 16:9 aspect ratio · object-cover */}
+          {photos.length > 0 ? (
+            <div className="group relative aspect-[16/9] overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100">
+              <img
+                src={photos[0]}
+                alt="Foto principal do restaurante"
+                className="h-full w-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={removePhoto}
+                aria-label="Remover foto"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-sm font-medium text-white shadow-md transition-opacity hover:bg-red-700"
+              >
+                ✕
+              </button>
+              <label className="absolute bottom-2 left-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-orange-300 bg-white/95 px-3 py-1.5 text-xs font-medium text-orange-700 shadow-sm transition-colors hover:bg-orange-50">
+                {uploading ? 'Enviando...' : 'Substituir foto'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handlePhotoUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
             </div>
-          )}
-
-          {/* Upload */}
-          {photos.length < 5 && (
-            <label className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 p-6 transition-colors hover:border-orange-400 hover:bg-orange-50">
+          ) : (
+            <label className="flex aspect-[16/9] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 transition-colors hover:border-orange-400 hover:bg-orange-50">
               <div className="text-center">
                 <svg className="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -832,7 +837,7 @@ export default function ProfilePage() {
               </div>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 onChange={handlePhotoUpload}
                 disabled={uploading}
                 className="hidden"
