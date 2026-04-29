@@ -10,7 +10,23 @@ interface Restaurant {
   address: string
   phone: string | null
   cuisine_type: string | null
+  logo_url: string | null
   photos: string[]
+}
+
+const LOGO_MAX_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
+const LOGO_ACCEPTED_MIME = ['image/png', 'image/jpeg', 'image/webp'] as const
+
+type LogoValidation = { ok: true } | { ok: false; error: string }
+
+function validateLogoFile(file: { size: number; type: string }): LogoValidation {
+  if (file.size > LOGO_MAX_SIZE_BYTES) {
+    return { ok: false, error: 'Arquivo muito grande — máximo 2MB' }
+  }
+  if (!LOGO_ACCEPTED_MIME.includes(file.type as typeof LOGO_ACCEPTED_MIME[number])) {
+    return { ok: false, error: 'Formato não suportado — use PNG, JPG ou WebP' }
+  }
+  return { ok: true }
 }
 
 export default function ProfilePage() {
@@ -18,7 +34,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [lastFailedLogoFile, setLastFailedLogoFile] = useState<File | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string; retry?: 'logo' } | null>(null)
 
   // Form fields
   const [name, setName] = useState('')
@@ -98,6 +117,7 @@ export default function ProfilePage() {
       if (data.hours_of_operation) {
         // Keep parsed slots
       }
+      setLogoUrl(data.logo_url || null)
       setPhotos(data.photos || [])
     }
 
@@ -142,6 +162,102 @@ export default function ProfilePage() {
     }
 
     setSaving(false)
+  }
+
+  async function uploadLogoFile(file: File) {
+    if (!restaurant) return
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+    const path = `logos/${restaurant.id}.${ext}`
+
+    setLogoUploading(true)
+    setMessage(null)
+
+    const { error: uploadError } = await supabase.storage
+      .from('restaurant-photos')
+      .upload(path, file, { upsert: true, contentType: file.type })
+
+    if (uploadError) {
+      console.error('[logo-upload] storage error:', uploadError)
+      setLastFailedLogoFile(file)
+      setLogoUploading(false)
+      setMessage({
+        type: 'error',
+        text: `Erro ao enviar logomarca: ${uploadError.message}`,
+        retry: 'logo',
+      })
+      return
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('restaurant-photos')
+      .getPublicUrl(path)
+
+    // Cache-buster: append timestamp so cliente PWA não veja logo stale ao trocar
+    const publicUrl = `${urlData.publicUrl}?v=${Date.now()}`
+
+    const { error: updateError } = await supabase
+      .from('restaurants')
+      .update({ logo_url: publicUrl })
+      .eq('id', restaurant.id)
+
+    if (updateError) {
+      console.error('[logo-upload] db update error:', updateError)
+      setLastFailedLogoFile(file)
+      setLogoUploading(false)
+      setMessage({
+        type: 'error',
+        text: `Logomarca enviada, mas falhou ao gravar no banco: ${updateError.message}`,
+        retry: 'logo',
+      })
+      return
+    }
+
+    setLogoUrl(publicUrl)
+    setLastFailedLogoFile(null)
+    setLogoUploading(false)
+    setMessage({ type: 'success', text: 'Logomarca atualizada!' })
+  }
+
+  async function handleLogoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!restaurant || !e.target.files || e.target.files.length === 0) return
+
+    const file = e.target.files[0]
+    e.target.value = '' // reset input para permitir mesmo arquivo de novo
+
+    const validation = validateLogoFile(file)
+    if (!validation.ok) {
+      setMessage({ type: 'error', text: validation.error })
+      return
+    }
+
+    await uploadLogoFile(file)
+  }
+
+  async function handleLogoRetry() {
+    if (!lastFailedLogoFile) return
+    await uploadLogoFile(lastFailedLogoFile)
+  }
+
+  async function handleLogoRemove() {
+    if (!restaurant || !logoUrl) return
+    setLogoUploading(true)
+    setMessage(null)
+
+    const { error: updateError } = await supabase
+      .from('restaurants')
+      .update({ logo_url: null })
+      .eq('id', restaurant.id)
+
+    if (updateError) {
+      console.error('[logo-remove] db update error:', updateError)
+      setLogoUploading(false)
+      setMessage({ type: 'error', text: `Erro ao remover logomarca: ${updateError.message}` })
+      return
+    }
+
+    setLogoUrl(null)
+    setLogoUploading(false)
+    setMessage({ type: 'success', text: 'Logomarca removida.' })
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -213,17 +329,86 @@ export default function ProfilePage() {
       {/* Message */}
       {message && (
         <div
-          className={`rounded-lg px-4 py-3 text-sm ${
+          role="alert"
+          className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm ${
             message.type === 'success'
               ? 'border border-green-200 bg-green-50 text-green-800'
               : 'border border-red-200 bg-red-50 text-red-800'
           }`}
         >
-          {message.text}
+          <span>{message.text}</span>
+          {message.type === 'error' && message.retry === 'logo' && lastFailedLogoFile && (
+            <button
+              type="button"
+              onClick={handleLogoRetry}
+              disabled={logoUploading}
+              className="shrink-0 rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {logoUploading ? 'Enviando...' : 'Tentar de novo'}
+            </button>
+          )}
         </div>
       )}
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* Logo (logomarca) */}
+        <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-neutral-800">Logomarca</h2>
+          <div className="flex items-center gap-5">
+            {/* Preview */}
+            <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-orange-200 bg-neutral-50">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt="Logomarca do restaurante"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-neutral-400">
+                  <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex-1">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 8l-4-4-4 4M12 4v12" />
+                </svg>
+                {logoUploading
+                  ? 'Enviando...'
+                  : logoUrl
+                    ? 'Trocar logomarca'
+                    : 'Adicionar logomarca'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleLogoSelect}
+                  disabled={logoUploading}
+                  className="hidden"
+                  data-testid="logo-upload"
+                />
+              </label>
+              {logoUrl && !logoUploading && (
+                <button
+                  type="button"
+                  onClick={handleLogoRemove}
+                  className="ml-2 text-xs font-medium text-red-600 hover:text-red-700"
+                >
+                  Remover
+                </button>
+              )}
+              <p className="mt-2 text-xs text-neutral-500">
+                PNG, JPG ou WebP · até 2MB · ideal: 512×512px
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Basic Info */}
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-neutral-800">Informacoes Basicas</h2>
