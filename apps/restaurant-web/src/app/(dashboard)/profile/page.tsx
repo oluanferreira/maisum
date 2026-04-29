@@ -12,6 +12,8 @@ interface Restaurant {
   cuisine_type: string | null
   logo_url: string | null
   photos: string[]
+  cep: string | null
+  city_id: string | null
 }
 
 const LOGO_MAX_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
@@ -29,6 +31,59 @@ function validateLogoFile(file: { size: number; type: string }): LogoValidation 
   return { ok: true }
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// MAISUM-RW-1.13: ViaCEP integration inline (legacy panel client-side)
+// Pattern source: maisum-app/src/lib/data/viacep.ts (server-safe · 5s timeout
+// · discriminated union). Replicated here client-side because legacy panel
+// has no server actions infra (WAIVER-MAISUM-RW-1.13-CLIENT-SIDE-VIACEP).
+// ───────────────────────────────────────────────────────────────────────────
+type ViaCepData = { localidade: string; uf: string; cep: string }
+type ViaCepResult =
+  | { ok: true; data: ViaCepData }
+  | { ok: false; error: 'not_found' | 'network' | 'invalid_format' }
+
+function cleanCep(cep: string): string {
+  return (cep ?? '').replace(/\D/g, '')
+}
+
+function formatCepInput(value: string): string {
+  const cleaned = cleanCep(value).slice(0, 8)
+  if (cleaned.length <= 5) return cleaned
+  return `${cleaned.slice(0, 5)}-${cleaned.slice(5)}`
+}
+
+async function fetchViaCepClient(cep: string): Promise<ViaCepResult> {
+  const cleaned = cleanCep(cep)
+  if (cleaned.length !== 8) return { ok: false, error: 'invalid_format' }
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 5000)
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${cleaned}/json/`, { signal: ctrl.signal })
+    clearTimeout(timer)
+    if (!res.ok) return { ok: false, error: 'network' }
+    const data = (await res.json()) as ViaCepData & { erro?: boolean }
+    if (data?.erro) return { ok: false, error: 'not_found' }
+    return { ok: true, data }
+  } catch {
+    clearTimeout(timer)
+    return { ok: false, error: 'network' }
+  }
+}
+
+interface ActiveCity {
+  id: string
+  name: string
+  state: string
+}
+
+type CepLookupState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success-active'; city: ActiveCity }
+  | { status: 'success-inactive'; localidade: string; uf: string }
+  | { status: 'not_found' }
+  | { status: 'network' }
+
 export default function ProfilePage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,6 +100,10 @@ export default function ProfilePage() {
   const [address, setAddress] = useState('')
   const [phone, setPhone] = useState('')
   const [cuisineType, setCuisineType] = useState('')
+  // MAISUM-RW-1.13: CEP + city resolution state
+  const [cep, setCep] = useState('')
+  const [cepLookup, setCepLookup] = useState<CepLookupState>({ status: 'idle' })
+  const [activeCities, setActiveCities] = useState<ActiveCity[]>([])
   interface HoursSlot { days: number[]; open: string; close: string }
   const [hoursSlots, setHoursSlots] = useState<HoursSlot[]>([
     { days: [1, 2, 3, 4, 5], open: '11:00', close: '22:00' },
@@ -80,9 +139,56 @@ export default function ProfilePage() {
 
   const supabase = createClient()
 
+  // MAISUM-RW-1.13: cities lookup helper (closure captures supabase + state)
+  async function resolveCepLookup(cepValue: string, citiesOverride?: ActiveCity[]) {
+    const cleaned = cleanCep(cepValue)
+    if (cleaned.length !== 8) {
+      setCepLookup({ status: 'idle' })
+      return
+    }
+    setCepLookup({ status: 'loading' })
+    const result = await fetchViaCepClient(cepValue)
+    if (!result.ok) {
+      setCepLookup(
+        result.error === 'not_found' ? { status: 'not_found' } : { status: 'network' },
+      )
+      return
+    }
+    const cities = citiesOverride && citiesOverride.length > 0 ? citiesOverride : activeCities
+    const targetName = result.data.localidade.toLowerCase().trim()
+    const targetState = result.data.uf.toLowerCase().trim()
+    const matched = cities.find(
+      (c) =>
+        c.name.toLowerCase().trim() === targetName &&
+        c.state.toLowerCase().trim() === targetState,
+    )
+    if (matched) {
+      setCepLookup({ status: 'success-active', city: matched })
+    } else {
+      setCepLookup({
+        status: 'success-inactive',
+        localidade: result.data.localidade,
+        uf: result.data.uf,
+      })
+    }
+  }
+
   useEffect(() => {
     loadRestaurant()
+    void loadActiveCities()
   }, [])
+
+  async function loadActiveCities() {
+    const { data, error } = await supabase
+      .from('cities')
+      .select('id, name, state')
+      .eq('is_active', true)
+    if (error) {
+      console.error('[MAISUM-RW-1.13] active cities load failed:', error)
+      return
+    }
+    if (data) setActiveCities(data as ActiveCity[])
+  }
 
   async function loadRestaurant() {
     setLoading(true)
@@ -119,6 +225,12 @@ export default function ProfilePage() {
       }
       setLogoUrl(data.logo_url || null)
       setPhotos(data.photos || [])
+      // MAISUM-RW-1.13: load existing CEP + trigger lookup to display detected city
+      const existingCep = (data.cep as string | null) || ''
+      setCep(formatCepInput(existingCep))
+      if (cleanCep(existingCep).length === 8) {
+        void resolveCepLookup(existingCep)
+      }
     }
 
     setLoading(false)
@@ -132,6 +244,28 @@ export default function ProfilePage() {
       setMessage({ type: 'error', text: 'Nome e obrigatorio' })
       return
     }
+    // MAISUM-RW-1.13: CEP + city validation BEFORE address
+    const cleanedCep = cleanCep(cep)
+    if (cleanedCep.length !== 8) {
+      setMessage({ type: 'error', text: 'CEP e obrigatorio (8 digitos)' })
+      return
+    }
+    if (cepLookup.status === 'loading') {
+      setMessage({ type: 'error', text: 'Aguarde a deteccao da cidade pelo CEP...' })
+      return
+    }
+    if (cepLookup.status === 'not_found' || cepLookup.status === 'network' || cepLookup.status === 'idle') {
+      setMessage({ type: 'error', text: 'CEP invalido ou nao encontrado. Verifique e tente novamente.' })
+      return
+    }
+    if (cepLookup.status === 'success-inactive') {
+      setMessage({
+        type: 'error',
+        text: `Sua cidade (${cepLookup.localidade} · ${cepLookup.uf}) ainda nao esta disponivel no MAISUM. Entre em contato pelo WhatsApp se quiser que sua cidade seja ativada.`,
+      })
+      return
+    }
+    // cepLookup.status === 'success-active' confirmed
     if (!address.trim()) {
       setMessage({ type: 'error', text: 'Endereco e obrigatorio' })
       return
@@ -149,6 +283,8 @@ export default function ProfilePage() {
         phone: phone.trim() || null,
         cuisine_type: cuisineType.trim() || null,
         photos,
+        cep: cleanedCep,
+        city_id: cepLookup.city.id,
       })
       .eq('id', restaurant.id)
 
@@ -450,6 +586,49 @@ export default function ProfilePage() {
                 placeholder="Descreva seu restaurante para os clientes..."
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
+            </div>
+
+            {/* MAISUM-RW-1.13: CEP field BEFORE address — drives city detection */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">
+                CEP *
+              </label>
+              <input
+                type="text"
+                value={cep}
+                onChange={(e) => {
+                  const formatted = formatCepInput(e.target.value)
+                  setCep(formatted)
+                  if (cleanCep(formatted).length < 8) setCepLookup({ status: 'idle' })
+                }}
+                onBlur={() => {
+                  if (cleanCep(cep).length === 8) void resolveCepLookup(cep)
+                }}
+                placeholder="Ex: 45000-000"
+                maxLength={9}
+                inputMode="numeric"
+                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              {/* CEP lookup status display (5 states · cores semânticas) */}
+              {cepLookup.status === 'loading' && (
+                <p className="mt-1 text-xs text-neutral-600">Detectando cidade...</p>
+              )}
+              {cepLookup.status === 'success-active' && (
+                <p className="mt-1 text-xs text-green-700">
+                  Cidade detectada: {cepLookup.city.name} · {cepLookup.city.state}
+                </p>
+              )}
+              {cepLookup.status === 'success-inactive' && (
+                <p className="mt-1 text-xs text-orange-700">
+                  Cidade detectada: {cepLookup.localidade} · {cepLookup.uf} · ainda nao disponivel no MAISUM
+                </p>
+              )}
+              {cepLookup.status === 'not_found' && (
+                <p className="mt-1 text-xs text-red-700">CEP nao encontrado · verifique os digitos</p>
+              )}
+              {cepLookup.status === 'network' && (
+                <p className="mt-1 text-xs text-red-700">Erro ao detectar cidade · tente de novo</p>
+              )}
             </div>
 
             <div>
