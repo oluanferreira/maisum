@@ -826,15 +826,11 @@ export default function ProfilePage() {
               </label>
             </div>
           ) : (
-            <label className="flex aspect-[16/9] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 transition-colors hover:border-orange-400 hover:bg-orange-50">
-              <div className="text-center">
-                <svg className="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <p className="mt-2 text-sm text-neutral-600">
-                  {uploading ? 'Enviando...' : 'Clique para adicionar foto'}
-                </p>
-              </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2.5 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              {uploading ? 'Enviando...' : 'Carregar imagem'}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
