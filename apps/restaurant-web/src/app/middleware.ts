@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (profile?.role !== 'restaurant_admin') {
+    if (profile?.role !== 'restaurant_admin' && profile?.role !== 'super_admin') {
       return NextResponse.redirect(new URL('/login?error=unauthorized', request.url))
     }
   }
