@@ -31,6 +31,38 @@ function validateLogoFile(file: { size: number; type: string }): LogoValidation 
   return { ok: true }
 }
 
+// MAISUM-RW-1.15 fix: client-side image compression via canvas. Foto de celular
+// 4K excede limite do bucket Supabase Storage. Resize proportional + JPEG quality
+// reduz tipicamente 4-8MB para 200-800KB sem perda visual perceptivel em 16:9.
+async function compressImage(file: File, maxDimension: number, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('canvas context unavailable')); return }
+      ctx.drawImage(img, 0, 0, width, height)
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('toBlob returned null')),
+        'image/jpeg',
+        quality,
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')) }
+    img.src = url
+  })
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // MAISUM-RW-1.13: ViaCEP integration inline (legacy panel client-side)
 // Pattern source: maisum-app/src/lib/data/viacep.ts (server-safe · 5s timeout
@@ -154,7 +186,20 @@ export default function ProfilePage() {
       )
       return
     }
-    const cities = citiesOverride && citiesOverride.length > 0 ? citiesOverride : activeCities
+    // Race-condition guard: se activeCities ainda nao carregou (loadActiveCities
+    // async em paralelo), busca inline antes do match — evita falso "inactive"
+    // quando a cidade ESTA ativa mas o array veio vazio.
+    let cities = citiesOverride && citiesOverride.length > 0 ? citiesOverride : activeCities
+    if (cities.length === 0) {
+      const { data: freshCities } = await supabase
+        .from('cities')
+        .select('id, name, state, slug, is_active')
+        .eq('is_active', true)
+      if (freshCities && freshCities.length > 0) {
+        cities = freshCities as ActiveCity[]
+        setActiveCities(cities)
+      }
+    }
     const targetName = result.data.localidade.toLowerCase().trim()
     const targetState = result.data.uf.toLowerCase().trim()
     const matched = cities.find(
@@ -258,14 +303,8 @@ export default function ProfilePage() {
       setMessage({ type: 'error', text: 'CEP invalido ou nao encontrado. Verifique e tente novamente.' })
       return
     }
-    if (cepLookup.status === 'success-inactive') {
-      setMessage({
-        type: 'error',
-        text: `Sua cidade (${cepLookup.localidade} · ${cepLookup.uf}) ainda nao esta disponivel no MAISUM. Entre em contato pelo WhatsApp se quiser que sua cidade seja ativada.`,
-      })
-      return
-    }
-    // cepLookup.status === 'success-active' confirmed
+    // success-inactive: NAO bloqueia save. Owner pode preencher tudo agora e
+    // ja fica pronto para quando a cidade for ativada (city_id permanece null).
     if (!address.trim()) {
       setMessage({ type: 'error', text: 'Endereco e obrigatorio' })
       return
@@ -284,7 +323,7 @@ export default function ProfilePage() {
         cuisine_type: cuisineType.trim() || null,
         photos,
         cep: cleanedCep,
-        city_id: cepLookup.city.id,
+        city_id: cepLookup.status === 'success-active' ? cepLookup.city.id : null,
       })
       .eq('id', restaurant.id)
 
@@ -402,15 +441,24 @@ export default function ProfilePage() {
     if (!restaurant || !e.target.files || e.target.files.length === 0) return
 
     const file = e.target.files[0]
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${restaurant.id}/${Date.now()}.${fileExt}`
-
     setUploading(true)
     setMessage(null)
 
+    // Compressao client-side: foto de celular (3-8MB · 4K) excede o limite do
+    // bucket restaurant-photos. Resize para 1600px max-width + JPEG q=0.85
+    // mantem qualidade visual e cabe < 2MB tipico.
+    let toUpload: Blob = file
+    try {
+      toUpload = await compressImage(file, 1600, 0.85)
+    } catch (err) {
+      console.warn('[photo-upload] compression skipped:', err)
+    }
+
+    const fileName = `${restaurant.id}/${Date.now()}.jpg`
+
     const { error: uploadError } = await supabase.storage
       .from('restaurant-photos')
-      .upload(fileName, file)
+      .upload(fileName, toUpload, { contentType: 'image/jpeg' })
 
     if (uploadError) {
       setMessage({ type: 'error', text: `Erro no upload: ${uploadError.message}` })
@@ -620,8 +668,8 @@ export default function ProfilePage() {
                 </p>
               )}
               {cepLookup.status === 'success-inactive' && (
-                <p className="mt-1 text-xs text-orange-700">
-                  Cidade detectada: {cepLookup.localidade} · {cepLookup.uf} · ainda nao disponivel no MAISUM
+                <p className="mt-1 text-xs text-neutral-600">
+                  Cidade detectada: {cepLookup.localidade} · {cepLookup.uf}
                 </p>
               )}
               {cepLookup.status === 'not_found' && (
