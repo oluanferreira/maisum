@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '@/services/supabase'
 import { SearchBar } from '@/components/molecules/search-bar'
 import { FilterChips } from '@/components/molecules/filter-chips'
+import { useAuthStore } from '@/stores/auth'
 
 interface Restaurant {
   id: string
@@ -109,11 +110,13 @@ export default function HomeScreen() {
   const [cuisineOptions, setCuisineOptions] = useState<string[]>([])
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([])
   const [selectedSort, setSelectedSort] = useState<string>(SORT_OPTIONS[0])
+  const [userCity, setUserCity] = useState('Localizando...')
+  
+  const session = useAuthStore((s) => s.session)
 
   const fetchRestaurants = useCallback(async () => {
+    setLoading(true)
     try {
-      // TODO: Replace with a DB view (avg_rating, review_count) when data grows
-      // to avoid fetching all reviews client-side.
       const { data, error } = await supabase
         .from('restaurants')
         .select('*, cities(name), reviews(rating)')
@@ -122,7 +125,6 @@ export default function HomeScreen() {
 
       if (error) throw error
 
-      // Compute avg_rating and review_count from joined reviews
       const items = (data ?? []).map((r: Record<string, unknown>) => {
         const reviews = (r.reviews ?? []) as { rating: number }[]
         const reviewCount = reviews.length
@@ -133,12 +135,11 @@ export default function HomeScreen() {
           ...r,
           avg_rating: avgRating,
           review_count: reviewCount,
-          reviews: undefined, // drop raw reviews from state
+          reviews: undefined,
         }
       }) as Restaurant[]
       setRestaurants(items)
 
-      // Extract distinct cuisine types for filter chips
       const cuisines = Array.from(
         new Set(items.map((r) => r.cuisine_type).filter(Boolean) as string[])
       ).sort()
@@ -150,9 +151,29 @@ export default function HomeScreen() {
     }
   }, [])
 
+  const fetchUserCity = useCallback(async () => {
+    if (!session?.user?.id) return
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('cities(name)')
+        .eq('id', session.user.id)
+        .single()
+      
+      if (data?.cities) {
+        setUserCity((data.cities as any).name)
+      } else {
+        setUserCity('Brasil')
+      }
+    } catch (err) {
+      setUserCity('Maisum')
+    }
+  }, [session])
+
   useEffect(() => {
     fetchRestaurants()
-  }, [fetchRestaurants])
+    fetchUserCity()
+  }, [fetchRestaurants, fetchUserCity])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -190,7 +211,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <Text style={styles.cityName}>Jequie, BA</Text>
+        <Text style={styles.cityName}>{userCity}</Text>
         <View style={styles.topBarIcons}>
           <TouchableOpacity style={styles.iconBtn}>
             <Text style={styles.iconText}>🔍</Text>
@@ -203,9 +224,9 @@ export default function HomeScreen() {
 
       {/* Hero Header */}
       <View style={styles.heroHeader}>
-        <Text style={styles.heroTitle}>Restaurantes em Jequie, BA</Text>
+        <Text style={styles.heroTitle}>Restaurantes em {userCity}</Text>
         <Text style={styles.heroSubtitle}>
-          {loading ? 'Carregando...' : `${restaurants.length} restaurante${restaurants.length !== 1 ? 's' : ''} disponive${restaurants.length !== 1 ? 'is' : 'l'}`}
+          {loading ? 'Carregando...' : `${restaurants.length} restaurante${restaurants.length !== 1 ? 's' : ''} disponível${restaurants.length !== 1 ? 'is' : ''}`}
         </Text>
       </View>
 

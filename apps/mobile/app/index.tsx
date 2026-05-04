@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from 'react-native'
 
 export default function Index() {
   const session = useAuthStore((s) => s.session)
+  const subscription = useAuthStore((s) => s.subscription)
   const isLoading = useAuthStore((s) => s.isLoading)
 
   if (isLoading) {

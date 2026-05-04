@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import QRCode from 'react-native-qrcode-svg'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '@/services/supabase'
+import { useAuthStore } from '@/stores/auth'
 
 // --- Types ---
 interface Coupon {
@@ -35,6 +36,7 @@ export default function QRCodeScreen() {
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   const [timeLeft, setTimeLeft] = useState(15 * 60) // 15 minutes in seconds
   const [expired, setExpired] = useState(false)
+  const subscription = useAuthStore((s) => s.session ? s.subscription : null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Load coupon eligibility data
@@ -185,6 +187,34 @@ export default function QRCodeScreen() {
             onPress={() => router.push('/plans' as never)}
           >
             <Text style={styles.primaryBtnText}>Ver Planos</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  // --- Subscription Expired Check ---
+  const isSubActive = subscription?.status === 'active' && new Date(subscription.current_period_end).getTime() > new Date().getTime()
+  
+  if (!isSubActive) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>← Voltar</Text>
+        </TouchableOpacity>
+        <View style={styles.centerContent}>
+          <View style={[styles.errorIcon, { backgroundColor: '#FFF7ED' }]}>
+            <Text style={{ fontSize: 32 }}>⏳</Text>
+          </View>
+          <Text style={styles.errorTitle}>Assinatura Inativa</Text>
+          <Text style={styles.errorSubtitle}>
+            Sua assinatura expirou. Ative seu plano novamente para utilizar seus cupons acumulados.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => router.push('/plans' as never)}
+          >
+            <Text style={styles.primaryBtnText}>Ativar Plano</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

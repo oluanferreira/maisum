@@ -110,6 +110,34 @@ function PaymentItem({ payment }: { payment: Payment }) {
   )
 }
 
+// --- Countdown Timer Hook ---
+function useCountdown(targetDate: string | null) {
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number; isExpired: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!targetDate) return
+
+    const calculate = () => {
+      const diff = new Date(targetDate).getTime() - new Date().getTime()
+      if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true }
+      
+      return {
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        isExpired: false
+      }
+    }
+
+    setTimeLeft(calculate())
+    const timer = setInterval(() => setTimeLeft(calculate()), 1000)
+    return () => clearInterval(timer)
+  }, [targetDate])
+
+  return timeLeft
+}
+
 // --- Main Screen ---
 export default function SubscriptionScreen() {
   const router = useRouter()
@@ -122,6 +150,7 @@ export default function SubscriptionScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const countdown = useCountdown(subscription?.current_period_end || null)
 
   const fetchData = useCallback(async () => {
     if (!userId) {
@@ -300,9 +329,15 @@ export default function SubscriptionScreen() {
         </View>
 
         {/* Info Card */}
-        <View style={styles.infoCard}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Renovacao em</Text>
+            <Text style={styles.infoLabel}>Tempo restante</Text>
+            <Text style={[styles.infoValue, { color: countdown?.isExpired ? '#EF4444' : '#FF6B35' }]}>
+              {countdown?.isExpired ? 'Expirado' : `${countdown?.days}d ${countdown?.hours}h ${countdown?.minutes}m`}
+            </Text>
+          </View>
+          <View style={styles.infoSep} />
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Proxima renovacao</Text>
             <Text style={styles.infoValue}>{formatDate(subscription.current_period_end)}</Text>
           </View>
           <View style={styles.infoSep} />
@@ -310,7 +345,6 @@ export default function SubscriptionScreen() {
             <Text style={styles.infoLabel}>Cupons disponiveis</Text>
             <Text style={[styles.infoValue, styles.couponCount]}>{couponCount}</Text>
           </View>
-        </View>
 
         {/* Payment History */}
         <View style={styles.section}>

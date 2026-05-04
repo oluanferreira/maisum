@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { supabase } from '@/services/supabase'
+import { useAuthStore } from '@/stores/auth'
 
 // --- Types ---
 type TabStatus = 'available' | 'used' | 'expired'
@@ -41,6 +42,8 @@ export default function CouponsScreen() {
   const [coupons, setCoupons] = useState<CouponItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const subscription = useAuthStore((s) => s.session ? s.subscription : null)
+  const isSubActive = subscription?.status === 'active' && new Date(subscription.current_period_end).getTime() > new Date().getTime()
 
   // Summary stats
   const [totalAvailable, setTotalAvailable] = useState(0)
@@ -156,6 +159,7 @@ export default function CouponsScreen() {
         isAvailable && styles.couponCardAvailable,
         isUsed && styles.couponCardUsed,
         isExpired && styles.couponCardExpired,
+        !isSubActive && isAvailable && { opacity: 0.6 }
       ]}>
         <View style={styles.couponContent}>
           <View style={styles.couponInfo}>
@@ -188,14 +192,18 @@ export default function CouponsScreen() {
 
           {isAvailable && (
             <TouchableOpacity
-              style={styles.useBtn}
+              style={[styles.useBtn, !isSubActive && { backgroundColor: '#9CA3AF' }]}
               onPress={() => {
+                if (!isSubActive) {
+                  router.push('/plans' as never)
+                  return
+                }
                 if (item.restaurant_id) {
                   router.push(`/coupon/${item.restaurant_id}`)
                 }
               }}
             >
-              <Text style={styles.useBtnText}>Usar →</Text>
+              <Text style={styles.useBtnText}>{isSubActive ? 'Usar →' : 'Ativar'}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -217,6 +225,17 @@ export default function CouponsScreen() {
           <Text style={styles.extrasText}>
             +{extras} extras disponiveis
           </Text>
+        )}
+        
+        {!isSubActive && (
+          <View style={{ marginTop: 16, backgroundColor: '#FEF2F2', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FEE2E2' }}>
+            <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '700' }}>
+              ⚠️ Assinatura Expirada
+            </Text>
+            <Text style={{ color: '#B91C1C', fontSize: 12, marginTop: 2 }}>
+              Renove seu plano para liberar o uso dos seus cupons.
+            </Text>
+          </View>
         )}
       </View>
 
