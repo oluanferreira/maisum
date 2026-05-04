@@ -536,7 +536,7 @@ export default function ProfilePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Perfil do Restaurante</h1>
+        <h1 className="text-2xl font-bold text-neutral-900">Configuracoes do Restaurante</h1>
         <p className="text-neutral-600">Gerencie as informacoes do seu restaurante</p>
       </div>
 
@@ -645,9 +645,11 @@ export default function ProfilePage() {
                 Tipo de Cozinha
               </label>
               <select
+                id="cuisine_type_select"
+                name="cuisine_type"
                 value={cuisineType}
                 onChange={(e) => setCuisineType(e.target.value)}
-                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                className="h-12 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 bg-white"
               >
                 <option value="">Selecione uma categoria</option>
                 {CUISINE_CATEGORIES.map((cat) => (
