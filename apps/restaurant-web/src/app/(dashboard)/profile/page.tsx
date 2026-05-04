@@ -355,6 +355,7 @@ export default function ProfilePage() {
         city_id: cepLookup.status === 'success-active' ? cepLookup.city.id : null,
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
+        is_active: true, // Garante que o restaurante fique ativo ao salvar as alterações
       })
       .eq('id', restaurant.id)
 
