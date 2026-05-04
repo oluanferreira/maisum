@@ -215,12 +215,14 @@ export default function ProfilePage() {
         setActiveCities(cities)
       }
     }
-    const targetName = result.data.localidade.toLowerCase().trim()
-    const targetState = result.data.uf.toLowerCase().trim()
+    const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    
+    const targetName = normalize(result.data.localidade)
+    const targetState = normalize(result.data.uf)
     const matched = cities.find(
       (c) =>
-        c.name.toLowerCase().trim() === targetName &&
-        c.state.toLowerCase().trim() === targetState,
+        normalize(c.name) === targetName &&
+        normalize(c.state) === targetState,
     )
     if (matched) {
       setCepLookup({ status: 'success-active', city: matched })
