@@ -134,6 +134,23 @@ export default function RestaurantEditPage() {
     setError('')
 
     try {
+      // MAISUM-AD-1.01: Best-effort geocoding automation
+      let lat = data.latitude
+      let lng = data.longitude
+
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(data.address)}&limit=1`, {
+          headers: { 'User-Agent': 'Maisum-Admin' }
+        });
+        const geoData = await res.json();
+        if (geoData && geoData.length > 0) {
+          lat = parseFloat(geoData[0].lat);
+          lng = parseFloat(geoData[0].lon);
+        }
+      } catch (e) {
+        console.error("Geocoding error:", e);
+      }
+
       // 1. Update restaurant data
       const { error: updateError } = await supabase
         .from('restaurants')
@@ -144,8 +161,8 @@ export default function RestaurantEditPage() {
           city_id: data.city_id,
           phone: data.phone || null,
           cuisine_type: data.cuisine_type || null,
-          latitude: data.latitude,
-          longitude: data.longitude,
+          latitude: lat,
+          longitude: lng,
         })
         .eq('id', restaurantId)
 
