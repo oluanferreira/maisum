@@ -28,12 +28,13 @@ interface City {
   name: string
 }
 
+import { updateRestaurant } from './actions'
+
 export default function RestaurantEditPage() {
   const params = useParams()
   const router = useRouter()
   const supabase = createClient()
   const restaurantId = params.id as string
-
   const [cities, setCities] = useState<City[]>([])
   const [existingPhotos, setExistingPhotos] = useState<string[]>([])
   const [newPhotos, setNewPhotos] = useState<File[]>([])
@@ -134,39 +135,11 @@ export default function RestaurantEditPage() {
     setError('')
 
     try {
-      // MAISUM-AD-1.01: Best-effort geocoding automation
-      let lat = data.latitude
-      let lng = data.longitude
+      const result = await updateRestaurant(restaurantId, data)
 
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(data.address)}&limit=1`, {
-          headers: { 'User-Agent': 'Maisum-Admin' }
-        });
-        const geoData = await res.json();
-        if (geoData && geoData.length > 0) {
-          lat = parseFloat(geoData[0].lat);
-          lng = parseFloat(geoData[0].lon);
-        }
-      } catch (e) {
-        console.error("Geocoding error:", e);
+      if (!result.ok) {
+        throw new Error(result.error)
       }
-
-      // 1. Update restaurant data
-      const { error: updateError } = await supabase
-        .from('restaurants')
-        .update({
-          name: data.name,
-          description: data.description || null,
-          address: data.address,
-          city_id: data.city_id,
-          phone: data.phone || null,
-          cuisine_type: data.cuisine_type || null,
-          latitude: lat,
-          longitude: lng,
-        })
-        .eq('id', restaurantId)
-
-      if (updateError) throw updateError
 
       // 2. Upload new photos if any
       let allPhotos = [...existingPhotos]
@@ -200,6 +173,7 @@ export default function RestaurantEditPage() {
       }
 
       router.push('/restaurants')
+      router.refresh()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro ao atualizar restaurante'
       setError(message)
