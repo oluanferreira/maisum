@@ -536,7 +536,7 @@ export default function ProfilePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Configuracoes do Restaurante</h1>
+        <h1 className="text-2xl font-bold text-neutral-900">Perfil do Restaurante</h1>
         <p className="text-neutral-600">Gerencie as informacoes do seu restaurante</p>
       </div>
 
