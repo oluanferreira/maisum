@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/../lib/supabase/client'
+import { getCoordinates } from '@/../lib/geocoding'
 
 interface Restaurant {
   id: string
@@ -151,6 +152,20 @@ export default function ProfilePage() {
     { value: 4, label: 'Qui' },
     { value: 5, label: 'Sex' },
     { value: 6, label: 'Sab' },
+  ]
+
+  const CUISINE_CATEGORIES = [
+    { value: 'pizzaria', label: 'Pizzaria 🍕' },
+    { value: 'hamburgueria', label: 'Hamburgueria 🍔' },
+    { value: 'japonesa', label: 'Japonês 🍣' },
+    { value: 'italiana', label: 'Italiano 🍝' },
+    { value: 'brasileira', label: 'Brasileira 🥘' },
+    { value: 'bar', label: 'Bar 🍺' },
+    { value: 'cafeteria', label: 'Cafeteria ☕' },
+    { value: 'sorveteria', label: 'Açaí/Sorvete 🍨' },
+    { value: 'churrascaria', label: 'Churrascaria 🥩' },
+    { value: 'espetinho', label: 'Espetinho 🍢' },
+    { value: 'outros', label: 'Outros 🍽️' },
   ]
 
   function hoursToString(slots: HoursSlot[]): string {
@@ -313,6 +328,18 @@ export default function ProfilePage() {
     setSaving(true)
     setMessage(null)
 
+    // MAISUM-RW-1.16: Best-effort geocoding automation
+    const addressParts = address.split(',')
+    const logradouro = addressParts[0]?.trim() || ''
+    const numero = addressParts[1]?.trim() || ''
+    
+    const coords = await getCoordinates({
+      logradouro,
+      numero,
+      cidade: cepLookup.status === 'success-active' ? cepLookup.city.name : '',
+      uf: cepLookup.status === 'success-active' ? cepLookup.city.state : '',
+    })
+
     const { error } = await supabase
       .from('restaurants')
       .update({
@@ -324,6 +351,8 @@ export default function ProfilePage() {
         photos,
         cep: cleanedCep,
         city_id: cepLookup.status === 'success-active' ? cepLookup.city.id : null,
+        latitude: coords?.lat ?? null,
+        longitude: coords?.lng ?? null,
       })
       .eq('id', restaurant.id)
 
@@ -615,13 +644,18 @@ export default function ProfilePage() {
               <label className="mb-1 block text-sm font-medium text-neutral-700">
                 Tipo de Cozinha
               </label>
-              <input
-                type="text"
+              <select
                 value={cuisineType}
                 onChange={(e) => setCuisineType(e.target.value)}
-                placeholder="Ex: Italiana, Japonesa, Brasileira"
                 className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
+              >
+                <option value="">Selecione uma categoria</option>
+                {CUISINE_CATEGORIES.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="md:col-span-2">
