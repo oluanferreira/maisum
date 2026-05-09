@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/../lib/supabase/client'
+import { trackRestaurantEvent } from '@/lib/analytics'
 
 // --- Types ---
 interface ValidationResult {
@@ -95,6 +96,13 @@ export default function ValidatePage() {
         setResult(data as ValidationResult)
         // Refresh today's list on success
         if (data?.valid) {
+          await trackRestaurantEvent(supabase, {
+            eventName: 'experience_validated',
+            pathname: '/validate',
+            restaurantId,
+            couponId: data.coupon_id ?? manualCode.trim(),
+            metadata: { inputMode: 'manual' },
+          })
           await loadTodayValidations(restaurantId)
         }
       }
