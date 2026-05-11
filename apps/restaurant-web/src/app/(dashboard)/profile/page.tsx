@@ -10,6 +10,8 @@ interface Restaurant {
   description: string | null
   address: string
   phone: string | null
+  whatsapp: string | null
+  instagram_url: string | null
   cuisine_type: string | null
   logo_url: string | null
   photos: string[]
@@ -132,6 +134,8 @@ export default function ProfilePage() {
   const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
   const [phone, setPhone] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [instagramUrl, setInstagramUrl] = useState('')
   const [cuisineType, setCuisineType] = useState('')
   // MAISUM-RW-1.13: CEP + city resolution state
   const [cep, setCep] = useState('')
@@ -280,6 +284,8 @@ export default function ProfilePage() {
       setDescription(data.description || '')
       setAddress(data.address || '')
       setPhone(data.phone || '')
+      setWhatsapp(data.whatsapp || '')
+      setInstagramUrl(data.instagram_url || '')
       setCuisineType(data.cuisine_type || '')
       // Parse hours_of_operation or use defaults
       if (data.hours_of_operation) {
@@ -349,6 +355,8 @@ export default function ProfilePage() {
         description: description.trim() || null,
         address: address.trim(),
         phone: phone.trim() || null,
+        whatsapp: whatsapp.trim() || null,
+        instagram_url: instagramUrl.trim() || null,
         cuisine_type: cuisineType.trim() || null,
         photos,
         cep: cleanedCep,
@@ -360,7 +368,6 @@ export default function ProfilePage() {
       .eq('id', restaurant.id)
 
     // Note: hours_of_operation stored as formatted string for now
-    // Instagram/website will be stored once columns are added
 
     if (error) {
       setMessage({ type: 'error', text: `Erro ao salvar: ${error.message}` })
@@ -745,6 +752,19 @@ export default function ProfilePage() {
               />
             </div>
 
+            <div>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">
+                WhatsApp
+              </label>
+              <input
+                type="text"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(e.target.value)}
+                placeholder="(XX) XXXXX-XXXX"
+                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+
           </div>
         </div>
 
@@ -854,6 +874,8 @@ export default function ProfilePage() {
                 <span className="text-sm text-neutral-400">@</span>
                 <input
                   type="text"
+                  value={instagramUrl}
+                  onChange={(e) => setInstagramUrl(e.target.value)}
                   placeholder="nomedorestaurante"
                   className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />

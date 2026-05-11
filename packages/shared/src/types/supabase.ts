@@ -481,12 +481,14 @@ export type Database = {
           cuisine_type: string | null
           description: string | null
           id: string
+          instagram_url: string | null
           is_active: boolean | null
           latitude: number
           longitude: number
           name: string
           phone: string | null
           photos: string[] | null
+          whatsapp: string | null
         }
         Insert: {
           address: string
@@ -496,12 +498,14 @@ export type Database = {
           cuisine_type?: string | null
           description?: string | null
           id?: string
+          instagram_url?: string | null
           is_active?: boolean | null
           latitude: number
           longitude: number
           name: string
           phone?: string | null
           photos?: string[] | null
+          whatsapp?: string | null
         }
         Update: {
           address?: string
@@ -511,12 +515,14 @@ export type Database = {
           cuisine_type?: string | null
           description?: string | null
           id?: string
+          instagram_url?: string | null
           is_active?: boolean | null
           latitude?: number
           longitude?: number
           name?: string
           phone?: string | null
           photos?: string[] | null
+          whatsapp?: string | null
         }
         Relationships: [
           {
