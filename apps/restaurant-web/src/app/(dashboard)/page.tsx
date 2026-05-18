@@ -151,8 +151,8 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Dashboard</h1>
-          <p className="text-neutral-600">Metricas do seu restaurante</p>
+          <h1 className="text-2xl font-bold text-neutral-900">Historico</h1>
+          <p className="text-neutral-600">Indicadores para acompanhar depois da operacao de validacao.</p>
         </div>
         <div className="flex gap-2">
           {periods.map((p) => (

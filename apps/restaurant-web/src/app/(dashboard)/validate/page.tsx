@@ -110,8 +110,8 @@ export default function ValidatePage() {
       setResult({ valid: false, reason: 'Erro ao validar cupom' })
     } finally {
       setValidating(false)
-      // Auto-dismiss after 3 seconds
-      setTimeout(() => setResult(null), 3000)
+      // Keep the result visible long enough for counter attendants to confirm it.
+      setTimeout(() => setResult(null), 8000)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualCode, restaurantId, loadTodayValidations])
@@ -131,11 +131,22 @@ export default function ValidatePage() {
   }
 
   return (
-    <div className="relative max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-neutral-900 mb-6">Validar Cupom</h1>
+    <div className="relative mx-auto max-w-4xl">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase text-orange-600">Operacao principal</p>
+          <h1 className="text-3xl font-bold text-neutral-900">Validar cupom</h1>
+          <p className="mt-1 text-sm text-neutral-600">
+            Cole ou digite o codigo apresentado pelo cliente. O retorno aparece imediatamente.
+          </p>
+        </div>
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+          Hoje: {todayValidations.length} validado(s)
+        </div>
+      </div>
 
       {/* Camera placeholder */}
-      <div className="bg-neutral-100 rounded-xl flex items-center justify-center h-64 mb-6 border-2 border-dashed border-neutral-300">
+      <div className="hidden">
         <div className="text-center">
           <div className="text-4xl mb-2">📷</div>
           <p className="text-neutral-500 font-medium">Scanner QR</p>
@@ -146,24 +157,33 @@ export default function ValidatePage() {
       {/* Manual input */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-neutral-200 mb-6">
         <label className="block text-sm font-semibold text-neutral-700 mb-2">
-          Ou digite o codigo:
+          Codigo do cupom
         </label>
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <input
             type="text"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
-            placeholder="ID do cupom (UUID)"
-            className="flex-1 px-4 py-3 border border-neutral-300 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void handleValidate()
+              }
+            }}
+            placeholder="Cole ou digite o codigo/ID do cupom"
+            className="h-14 flex-1 rounded-lg border border-neutral-300 px-4 text-base text-neutral-900 placeholder-neutral-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
           <button
             onClick={handleValidate}
             disabled={validating || !manualCode.trim() || !restaurantId}
-            className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-w-[100px]"
+            className="h-14 rounded-lg bg-orange-500 px-8 text-base font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[140px]"
           >
-            {validating ? '...' : 'Validar'}
+            {validating ? 'Validando...' : 'Validar'}
           </button>
         </div>
+        <p className="mt-3 text-xs text-neutral-500">
+          Scanner de camera fica fora desta fase ate existir leitura real. Esta tela prioriza validacao manual confiavel.
+        </p>
       </div>
 
       {/* Result overlay */}
@@ -173,10 +193,10 @@ export default function ValidatePage() {
             ? 'bg-green-50 border-2 border-green-400'
             : 'bg-red-50 border-2 border-red-400'
         }`}>
-          <div className={`text-6xl font-bold mb-3 ${
+          <div className={`text-5xl font-bold mb-3 ${
             result.valid ? 'text-green-500' : 'text-red-500'
           }`}>
-            {result.valid ? '✓' : '✗'}
+            {result.valid ? 'OK' : '!'}
           </div>
           <h2 className={`text-xl font-bold mb-2 ${
             result.valid ? 'text-green-700' : 'text-red-700'

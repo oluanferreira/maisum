@@ -7,21 +7,17 @@ import {
   Gift,
   QrCode,
   ShareNetwork,
-  ChatCircle,
-  Star,
   UserCircle,
   SignOut,
 } from '@phosphor-icons/react'
 import { createClient } from '@/../lib/supabase/client'
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: ChartBar },
-  { href: '/benefits', label: 'Cardapio +um', icon: Gift },
-  { href: '/validate', label: 'Validar Cupom', icon: QrCode },
-  { href: '/kit', label: 'Kit parceiro', icon: ShareNetwork },
-  { href: '/chat', label: 'Chat', icon: ChatCircle },
-  { href: '/reviews', label: 'Avaliacoes', icon: Star },
+  { href: '/validate', label: 'Validar cupom', icon: QrCode },
+  { href: '/benefits', label: 'Pratos e promocoes', icon: Gift },
   { href: '/profile', label: 'Perfil', icon: UserCircle },
+  { href: '/', label: 'Historico', icon: ChartBar },
+  { href: '/kit', label: 'Kit e ajuda', icon: ShareNetwork },
 ]
 
 export function Sidebar() {

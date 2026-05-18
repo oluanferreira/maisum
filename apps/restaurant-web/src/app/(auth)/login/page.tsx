@@ -29,7 +29,7 @@ function LoginForm() {
         return
       }
 
-      router.push('/')
+      router.push('/validate')
     } catch {
       setError('Erro ao fazer login. Tente novamente.')
     } finally {
