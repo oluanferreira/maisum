@@ -133,7 +133,6 @@ export default function ProfilePage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
-  const [phone, setPhone] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [instagramUrl, setInstagramUrl] = useState('')
   const [cuisineType, setCuisineType] = useState('')
@@ -252,8 +251,7 @@ export default function ProfilePage() {
       setName(data.name || '')
       setDescription(data.description || '')
       setAddress(data.address || '')
-      setPhone(data.phone || '')
-      setWhatsapp(data.whatsapp || '')
+      setWhatsapp(data.whatsapp || data.phone || '')
       setInstagramUrl(data.instagram_url || '')
       setCuisineType(data.cuisine_type || '')
       setLogoUrl(data.logo_url || null)
@@ -319,7 +317,7 @@ export default function ProfilePage() {
         name: name.trim(),
         description: description.trim() || null,
         address: address.trim(),
-        phone: phone.trim() || null,
+        phone: whatsapp.trim() || null,
         whatsapp: whatsapp.trim() || null,
         instagram_url: instagramUrl.trim() || null,
         cuisine_type: cuisineType.trim() || null,
@@ -702,38 +700,12 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Telefone
-              </label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(XX) XXXXX-XXXX"
-                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                WhatsApp
-              </label>
-              <input
-                type="text"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="(XX) XXXXX-XXXX"
-                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-            </div>
-
           </div>
         </div>
 
-        {/* Social & Web */}
+        {/* Communication Channels */}
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-neutral-800">Redes Sociais e Site</h2>
+          <h2 className="mb-4 text-lg font-semibold text-neutral-800">Canais de comunicacao</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -753,14 +725,16 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Site
+                WhatsApp
               </label>
               <input
-                type="url"
-                placeholder="https://www.meurestaurante.com.br"
+                type="text"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(e.target.value)}
+                placeholder="(XX) XXXXX-XXXX"
                 className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
-              <p className="mt-1 text-xs text-neutral-400">Link do site ou cardapio online</p>
+              <p className="mt-1 text-xs text-neutral-400">Canal principal para contato com clientes</p>
             </div>
           </div>
         </div>
