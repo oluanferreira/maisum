@@ -28,9 +28,9 @@ interface BenefitRule {
   is_active: boolean
 }
 
-interface AvailabilitySlot {
-  id?: string
-  days: number[]
+interface AvailabilityDayRule {
+  day: number
+  enabled: boolean
   start: string
   end: string
   dailyLimit: number
@@ -60,19 +60,16 @@ const WEEKDAYS = [
   { value: 6, label: 'Sab' },
 ]
 
-const DEFAULT_AVAILABILITY: AvailabilitySlot[] = [
-  { days: [1, 2, 3, 4, 5], start: '11:00', end: '22:00', dailyLimit: 20 },
-  { days: [0, 6], start: '11:00', end: '23:00', dailyLimit: 20 },
-]
+const DEFAULT_AVAILABILITY: AvailabilityDayRule[] = WEEKDAYS.map((day) => ({
+  day: day.value,
+  enabled: true,
+  start: '11:00',
+  end: day.value === 0 || day.value === 6 ? '23:00' : '22:00',
+  dailyLimit: 20,
+}))
 
 function formatPrice(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
-}
-
-function formatDaysSummary(days: number[]): string {
-  if (days.length === 7) return 'Todos os dias'
-  if (days.length === 0) return 'Nenhum dia'
-  return days.map((d) => WEEKDAYS.find((day) => day.value === d)?.label).filter(Boolean).join(', ')
 }
 
 function toTimeInput(value: string | null | undefined): string {
@@ -87,24 +84,43 @@ function parsePriceToCents(value: string): number | null {
   return Math.round(num * 100)
 }
 
-function rulesToSlots(rules: BenefitRule[]): AvailabilitySlot[] {
-  if (rules.length === 0) return DEFAULT_AVAILABILITY
-  return rules
-    .filter((rule) => !rule.benefit_id && rule.is_active)
-    .map((rule) => ({
-      id: rule.id,
-      days: [...(rule.available_days || [])].sort(),
-      start: toTimeInput(rule.available_hours_start),
-      end: toTimeInput(rule.available_hours_end),
-      dailyLimit: rule.daily_limit || 20,
-    }))
+function rulesToDayRules(rules: BenefitRule[]): AvailabilityDayRule[] {
+  const activeRules = rules.filter((rule) => !rule.benefit_id && rule.is_active)
+
+  if (activeRules.length === 0) return DEFAULT_AVAILABILITY
+
+  const rulesByDay = new Map<number, AvailabilityDayRule>()
+  for (const rule of DEFAULT_AVAILABILITY) {
+    rulesByDay.set(rule.day, { ...rule, enabled: false })
+  }
+
+  for (const rule of activeRules) {
+    for (const day of rule.available_days || []) {
+      if (day < 0 || day > 6) continue
+      rulesByDay.set(day, {
+        day,
+        enabled: true,
+        start: toTimeInput(rule.available_hours_start),
+        end: toTimeInput(rule.available_hours_end),
+        dailyLimit: rule.daily_limit || 20,
+      })
+    }
+  }
+
+  return WEEKDAYS.map((day) => rulesByDay.get(day.value) || {
+    day: day.value,
+    enabled: false,
+    start: '11:00',
+    end: '22:00',
+    dailyLimit: 20,
+  })
 }
 
 const supabase = createClient()
 
 export default function BenefitsPage() {
   const [benefits, setBenefits] = useState<Benefit[]>([])
-  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>(DEFAULT_AVAILABILITY)
+  const [availabilityRules, setAvailabilityRules] = useState<AvailabilityDayRule[]>(DEFAULT_AVAILABILITY)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -169,7 +185,7 @@ export default function BenefitsPage() {
     ])
 
     if (benefitsRes.data) setBenefits(benefitsRes.data)
-    if (rulesRes.data) setAvailabilitySlots(rulesToSlots(rulesRes.data as BenefitRule[]))
+    if (rulesRes.data) setAvailabilityRules(rulesToDayRules(rulesRes.data as BenefitRule[]))
     setLoading(false)
   }
 
@@ -208,33 +224,28 @@ export default function BenefitsPage() {
     setShowForm(true)
   }
 
-  function updateAvailabilitySlot(index: number, patch: Partial<AvailabilitySlot>) {
-    setAvailabilitySlots((current) =>
-      current.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)),
+  function updateAvailabilityRule(day: number, patch: Partial<AvailabilityDayRule>) {
+    setAvailabilityRules((current) =>
+      current.map((rule) => (rule.day === day ? { ...rule, ...patch } : rule)),
     )
   }
 
-  function toggleSlotDay(index: number, day: number) {
-    const slot = availabilitySlots[index]
-    const days = slot.days.includes(day)
-      ? slot.days.filter((d) => d !== day)
-      : [...slot.days, day].sort()
-    updateAvailabilitySlot(index, { days })
+  function getWeekdayLabel(day: number) {
+    return WEEKDAYS.find((weekday) => weekday.value === day)?.label || ''
   }
 
   async function saveAvailability() {
     if (!restaurantId) return
 
-    const validSlots = availabilitySlots
-      .map((slot) => ({
-        ...slot,
-        days: [...new Set(slot.days)].sort(),
-        dailyLimit: Math.max(1, slot.dailyLimit || 1),
+    const enabledRules = availabilityRules
+      .filter((rule) => rule.enabled)
+      .map((rule) => ({
+        ...rule,
+        dailyLimit: Math.max(1, rule.dailyLimit || 1),
       }))
-      .filter((slot) => slot.days.length > 0)
 
-    if (validSlots.length === 0) {
-      setMessage({ type: 'error', text: 'Configure pelo menos uma faixa de disponibilidade.' })
+    if (enabledRules.length === 0) {
+      setMessage({ type: 'error', text: 'Configure pelo menos um dia de disponibilidade.' })
       return
     }
 
@@ -252,13 +263,13 @@ export default function BenefitsPage() {
       return
     }
 
-    const rows = validSlots.map((slot) => ({
+    const rows = enabledRules.map((rule) => ({
       restaurant_id: restaurantId,
       benefit_id: null,
-      available_days: slot.days,
-      available_hours_start: slot.start,
-      available_hours_end: slot.end,
-      daily_limit: slot.dailyLimit,
+      available_days: [rule.day],
+      available_hours_start: rule.start,
+      available_hours_end: rule.end,
+      daily_limit: rule.dailyLimit,
       is_active: true,
     }))
 
@@ -270,7 +281,12 @@ export default function BenefitsPage() {
       return
     }
 
-    setAvailabilitySlots(validSlots)
+    setAvailabilityRules((current) =>
+      current.map((rule) => ({
+        ...rule,
+        dailyLimit: Math.max(1, rule.dailyLimit || 1),
+      })),
+    )
     setMessage({ type: 'success', text: 'Regras de disponibilidade atualizadas para todos os pratos.' })
     setSavingAvailability(false)
   }
@@ -462,65 +478,48 @@ export default function BenefitsPage() {
       )}
 
       <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-4">
           <div>
             <h2 className="text-lg font-semibold text-neutral-900">Regras de Disponibilidade</h2>
             <p className="text-sm text-neutral-500">Esses dias, horarios e limites valem para todos os pratos ativos.</p>
           </div>
-          <button
-            type="button"
-            onClick={() =>
-              setAvailabilitySlots((current) => [
-                ...current,
-                { days: [], start: '11:00', end: '22:00', dailyLimit: 20 },
-              ])
-            }
-            className="rounded-lg border border-orange-300 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50"
-          >
-            + Adicionar faixa
-          </button>
         </div>
 
-        <div className="space-y-4">
-          {availabilitySlots.map((slot, idx) => (
-            <div key={idx} className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold text-neutral-700">Faixa {idx + 1}</span>
-                {availabilitySlots.length > 1 && (
+        <div className="overflow-x-auto pb-1">
+          <div className="grid min-w-[860px] grid-cols-7 gap-3">
+            {availabilityRules.map((rule) => (
+              <div
+                key={rule.day}
+                className={`rounded-lg border p-3 ${
+                  rule.enabled
+                    ? 'border-orange-200 bg-orange-50/50'
+                    : 'border-neutral-200 bg-neutral-50'
+                }`}
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-neutral-800">{getWeekdayLabel(rule.day)}</span>
                   <button
                     type="button"
-                    onClick={() => setAvailabilitySlots((current) => current.filter((_, i) => i !== idx))}
-                    className="text-xs font-medium text-red-600 hover:text-red-700"
-                  >
-                    Remover
-                  </button>
-                )}
-              </div>
-
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {WEEKDAYS.map((day) => (
-                  <button
-                    key={day.value}
-                    type="button"
-                    onClick={() => toggleSlotDay(idx, day.value)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      slot.days.includes(day.value)
-                        ? 'bg-orange-600 text-white'
-                        : 'border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50'
+                    onClick={() => updateAvailabilityRule(rule.day, { enabled: !rule.enabled })}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      rule.enabled ? 'bg-orange-600' : 'bg-neutral-300'
                     }`}
+                    aria-label={`${rule.enabled ? 'Desativar' : 'Ativar'} ${getWeekdayLabel(rule.day)}`}
                   >
-                    {day.label}
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      rule.enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
                   </button>
-                ))}
-              </div>
+                </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="space-y-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-neutral-500">Inicio</label>
                   <input
                     type="time"
-                    value={slot.start}
-                    onChange={(e) => updateAvailabilitySlot(idx, { start: e.target.value })}
+                    value={rule.start}
+                    onChange={(e) => updateAvailabilityRule(rule.day, { start: e.target.value })}
+                    disabled={!rule.enabled}
                     className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                   />
                 </div>
@@ -528,8 +527,9 @@ export default function BenefitsPage() {
                   <label className="mb-1 block text-xs font-medium text-neutral-500">Fim</label>
                   <input
                     type="time"
-                    value={slot.end}
-                    onChange={(e) => updateAvailabilitySlot(idx, { end: e.target.value })}
+                    value={rule.end}
+                    onChange={(e) => updateAvailabilityRule(rule.day, { end: e.target.value })}
+                    disabled={!rule.enabled}
                     className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                   />
                 </div>
@@ -539,21 +539,26 @@ export default function BenefitsPage() {
                     type="number"
                     min={1}
                     max={999}
-                    value={slot.dailyLimit}
-                    onChange={(e) => updateAvailabilitySlot(idx, { dailyLimit: Math.max(1, parseInt(e.target.value) || 1) })}
+                    value={rule.dailyLimit}
+                    onChange={(e) => updateAvailabilityRule(rule.day, { dailyLimit: Math.max(1, parseInt(e.target.value) || 1) })}
+                    disabled={!rule.enabled}
                     className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                   />
                 </div>
+                  {!rule.enabled && (
+                    <p className="text-xs font-medium text-neutral-500">Indisponivel</p>
+                  )}
               </div>
             </div>
           ))}
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-neutral-500">
-            Resumo: {availabilitySlots
-              .filter((slot) => slot.days.length > 0)
-              .map((slot) => `${formatDaysSummary(slot.days)} ${slot.start}-${slot.end} Max ${slot.dailyLimit}/dia`)
+            Resumo: {availabilityRules
+              .filter((rule) => rule.enabled)
+              .map((rule) => `${getWeekdayLabel(rule.day)} ${rule.start}-${rule.end} Max ${rule.dailyLimit}/dia`)
               .join(' | ') || 'Nenhuma disponibilidade configurada'}
           </p>
           <button
