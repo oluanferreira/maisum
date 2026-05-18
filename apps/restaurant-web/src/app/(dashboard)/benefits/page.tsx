@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/../lib/supabase/client'
 
 type BenefitCategory = 'prato' | 'drink' | 'sobremesa' | 'combo'
@@ -28,6 +28,14 @@ interface BenefitRule {
   is_active: boolean
 }
 
+interface AvailabilitySlot {
+  id?: string
+  days: number[]
+  start: string
+  end: string
+  dailyLimit: number
+}
+
 const CATEGORIES: { value: BenefitCategory; label: string }[] = [
   { value: 'prato', label: 'Prato' },
   { value: 'drink', label: 'Drink' },
@@ -52,6 +60,11 @@ const WEEKDAYS = [
   { value: 6, label: 'Sab' },
 ]
 
+const DEFAULT_AVAILABILITY: AvailabilitySlot[] = [
+  { days: [1, 2, 3, 4, 5], start: '11:00', end: '22:00', dailyLimit: 20 },
+  { days: [0, 6], start: '11:00', end: '23:00', dailyLimit: 20 },
+]
+
 function formatPrice(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
 }
@@ -59,19 +72,45 @@ function formatPrice(cents: number): string {
 function formatDaysSummary(days: number[]): string {
   if (days.length === 7) return 'Todos os dias'
   if (days.length === 0) return 'Nenhum dia'
-  return days.map((d) => WEEKDAYS[d]?.label).join(', ')
+  return days.map((d) => WEEKDAYS.find((day) => day.value === d)?.label).filter(Boolean).join(', ')
+}
+
+function toTimeInput(value: string | null | undefined): string {
+  return (value || '').substring(0, 5) || '11:00'
+}
+
+function parsePriceToCents(value: string): number | null {
+  if (!value.trim()) return null
+  const cleaned = value.replace(/[R$\s]/g, '').replace(',', '.')
+  const num = parseFloat(cleaned)
+  if (Number.isNaN(num)) return null
+  return Math.round(num * 100)
+}
+
+function rulesToSlots(rules: BenefitRule[]): AvailabilitySlot[] {
+  if (rules.length === 0) return DEFAULT_AVAILABILITY
+  return rules
+    .filter((rule) => !rule.benefit_id && rule.is_active)
+    .map((rule) => ({
+      id: rule.id,
+      days: [...(rule.available_days || [])].sort(),
+      start: toTimeInput(rule.available_hours_start),
+      end: toTimeInput(rule.available_hours_end),
+      dailyLimit: rule.daily_limit || 20,
+    }))
 }
 
 const supabase = createClient()
 
 export default function BenefitsPage() {
   const [benefits, setBenefits] = useState<Benefit[]>([])
-  const [rulesMap, setRulesMap] = useState<Record<string, BenefitRule>>({})
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>(DEFAULT_AVAILABILITY)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [savingAvailability, setSavingAvailability] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Form state
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
@@ -82,35 +121,24 @@ export default function BenefitsPage() {
   const [formPromoCustom, setFormPromoCustom] = useState('')
   const [formPhotoFile, setFormPhotoFile] = useState<File | null>(null)
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Per-benefit rules form — per-day configuration
-  interface DayRule { enabled: boolean; start: string; end: string }
-  const defaultDayRules = (): Record<number, DayRule> => ({
-    0: { enabled: false, start: '11:00', end: '22:00' },
-    1: { enabled: true, start: '11:00', end: '22:00' },
-    2: { enabled: true, start: '11:00', end: '22:00' },
-    3: { enabled: true, start: '11:00', end: '22:00' },
-    4: { enabled: true, start: '11:00', end: '22:00' },
-    5: { enabled: true, start: '11:00', end: '22:00' },
-    6: { enabled: false, start: '11:00', end: '22:00' },
-  })
-  const [formDayRules, setFormDayRules] = useState<Record<number, DayRule>>(defaultDayRules())
-  const [formRuleLimit, setFormRuleLimit] = useState(20)
-
-  // Delete confirmation
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-
   useEffect(() => {
-    loadData()
+    void loadData()
   }, [])
 
   async function loadData() {
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); return }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      setLoading(false)
+      return
+    }
 
     const { data: restaurant } = await supabase
       .from('restaurants')
@@ -118,7 +146,10 @@ export default function BenefitsPage() {
       .eq('admin_user_id', user.id)
       .single()
 
-    if (!restaurant) { setLoading(false); return }
+    if (!restaurant) {
+      setLoading(false)
+      return
+    }
 
     setRestaurantId(restaurant.id)
 
@@ -131,21 +162,14 @@ export default function BenefitsPage() {
       supabase
         .from('benefit_rules')
         .select('*')
-        .eq('restaurant_id', restaurant.id),
+        .eq('restaurant_id', restaurant.id)
+        .is('benefit_id', null)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true }),
     ])
 
     if (benefitsRes.data) setBenefits(benefitsRes.data)
-
-    if (rulesRes.data) {
-      const map: Record<string, BenefitRule> = {}
-      for (const rule of rulesRes.data) {
-        if (rule.benefit_id) {
-          map[rule.benefit_id] = rule
-        }
-      }
-      setRulesMap(map)
-    }
-
+    if (rulesRes.data) setAvailabilitySlots(rulesToSlots(rulesRes.data as BenefitRule[]))
     setLoading(false)
   }
 
@@ -158,8 +182,6 @@ export default function BenefitsPage() {
     setFormPromoCustom('')
     setFormPhotoFile(null)
     setFormPhotoPreview(null)
-    setFormDayRules(defaultDayRules())
-    setFormRuleLimit(20)
     setEditingId(null)
     setShowForm(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -183,25 +205,74 @@ export default function BenefitsPage() {
     setFormPhotoFile(null)
     setFormPhotoPreview(benefit.photo_url)
     setEditingId(benefit.id)
-
-    const rule = rulesMap[benefit.id]
-    const dr = defaultDayRules()
-    if (rule) {
-      const activeDays = rule.available_days || []
-      for (let d = 0; d < 7; d++) {
-        dr[d] = {
-          enabled: activeDays.includes(d),
-          start: rule.available_hours_start || '11:00',
-          end: rule.available_hours_end || '22:00',
-        }
-      }
-      setFormRuleLimit(rule.daily_limit || 20)
-    } else {
-      setFormRuleLimit(20)
-    }
-    setFormDayRules(dr)
-
     setShowForm(true)
+  }
+
+  function updateAvailabilitySlot(index: number, patch: Partial<AvailabilitySlot>) {
+    setAvailabilitySlots((current) =>
+      current.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)),
+    )
+  }
+
+  function toggleSlotDay(index: number, day: number) {
+    const slot = availabilitySlots[index]
+    const days = slot.days.includes(day)
+      ? slot.days.filter((d) => d !== day)
+      : [...slot.days, day].sort()
+    updateAvailabilitySlot(index, { days })
+  }
+
+  async function saveAvailability() {
+    if (!restaurantId) return
+
+    const validSlots = availabilitySlots
+      .map((slot) => ({
+        ...slot,
+        days: [...new Set(slot.days)].sort(),
+        dailyLimit: Math.max(1, slot.dailyLimit || 1),
+      }))
+      .filter((slot) => slot.days.length > 0)
+
+    if (validSlots.length === 0) {
+      setMessage({ type: 'error', text: 'Configure pelo menos uma faixa de disponibilidade.' })
+      return
+    }
+
+    setSavingAvailability(true)
+    setMessage(null)
+
+    const { error: deleteError } = await supabase
+      .from('benefit_rules')
+      .delete()
+      .eq('restaurant_id', restaurantId)
+
+    if (deleteError) {
+      setMessage({ type: 'error', text: `Erro ao limpar regras antigas: ${deleteError.message}` })
+      setSavingAvailability(false)
+      return
+    }
+
+    const rows = validSlots.map((slot) => ({
+      restaurant_id: restaurantId,
+      benefit_id: null,
+      available_days: slot.days,
+      available_hours_start: slot.start,
+      available_hours_end: slot.end,
+      daily_limit: slot.dailyLimit,
+      is_active: true,
+    }))
+
+    const { error: insertError } = await supabase.from('benefit_rules').insert(rows)
+
+    if (insertError) {
+      setMessage({ type: 'error', text: `Erro ao salvar disponibilidade: ${insertError.message}` })
+      setSavingAvailability(false)
+      return
+    }
+
+    setAvailabilitySlots(validSlots)
+    setMessage({ type: 'success', text: 'Regras de disponibilidade atualizadas para todos os pratos.' })
+    setSavingAvailability(false)
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -217,14 +288,6 @@ export default function BenefitsPage() {
     const reader = new FileReader()
     reader.onload = () => setFormPhotoPreview(reader.result as string)
     reader.readAsDataURL(file)
-  }
-
-  function parsePriceToCents(value: string): number | null {
-    if (!value.trim()) return null
-    const cleaned = value.replace(/[R$\s]/g, '').replace(',', '.')
-    const num = parseFloat(cleaned)
-    if (isNaN(num)) return null
-    return Math.round(num * 100)
   }
 
   async function uploadPhoto(benefitId: string): Promise<string | null> {
@@ -255,72 +318,47 @@ export default function BenefitsPage() {
       return
     }
 
-    const hasEnabledDay = Object.values(formDayRules).some(d => d.enabled)
-    if (!hasEnabledDay) {
-      setMessage({ type: 'error', text: 'Selecione pelo menos 1 dia da semana' })
-      return
-    }
-
     setSaving(true)
     setMessage(null)
 
     const priceInCents = parsePriceToCents(formOriginalPrice)
-    const promoDescription = formPromoType === 'leve2pague1'
-      ? 'Leve 2, pague 1'
-      : formPromoCustom.trim() || 'Promocao personalizada'
+    const promoDescription =
+      formPromoType === 'leve2pague1'
+        ? 'Leve 2, pague 1'
+        : formPromoCustom.trim() || 'Promocao personalizada'
+
+    const payload = {
+      name: formName.trim(),
+      description: formDescription.trim() || null,
+      category: formCategory,
+      original_price: priceInCents,
+      promo_description: promoDescription,
+    }
 
     if (editingId) {
-      // Update benefit
-      const updateData: Record<string, unknown> = {
-        name: formName.trim(),
-        description: formDescription.trim() || null,
-        category: formCategory,
-        original_price: priceInCents,
-        promo_description: promoDescription,
-      }
-
+      const updateData: Record<string, unknown> = { ...payload }
       if (formPhotoFile) {
         const photoUrl = await uploadPhoto(editingId)
-        if (photoUrl) {
-          updateData.photo_url = photoUrl
-        } else {
+        if (!photoUrl) {
           setMessage({ type: 'error', text: 'Erro ao enviar foto. Tente novamente.' })
           setSaving(false)
           return
         }
+        updateData.photo_url = photoUrl
       }
 
       const { error } = await supabase.from('benefits').update(updateData).eq('id', editingId)
-
       if (error) {
         setMessage({ type: 'error', text: `Erro ao atualizar: ${error.message}` })
         setSaving(false)
         return
       }
 
-      // Upsert rule
-      const ruleError = await upsertRule(editingId)
-      if (ruleError) {
-        setMessage({ type: 'error', text: `Prato atualizado, mas erro nas regras: ${ruleError}` })
-        resetForm()
-        await loadData()
-        setSaving(false)
-        return
-      }
-
       setMessage({ type: 'success', text: 'Prato atualizado!' })
     } else {
-      // Insert benefit
       const { data: newBenefit, error } = await supabase
         .from('benefits')
-        .insert({
-          restaurant_id: restaurantId,
-          name: formName.trim(),
-          description: formDescription.trim() || null,
-          category: formCategory,
-          original_price: priceInCents,
-          promo_description: promoDescription,
-        })
+        .insert({ restaurant_id: restaurantId, ...payload })
         .select('id')
         .single()
 
@@ -330,7 +368,6 @@ export default function BenefitsPage() {
         return
       }
 
-      // Upload photo
       if (formPhotoFile) {
         const photoUrl = await uploadPhoto(newBenefit.id)
         if (photoUrl) {
@@ -344,56 +381,12 @@ export default function BenefitsPage() {
         }
       }
 
-      // Create rule
-      const ruleError = await upsertRule(newBenefit.id)
-      if (ruleError) {
-        setMessage({ type: 'error', text: `Prato criado, mas erro nas regras: ${ruleError}` })
-        resetForm()
-        await loadData()
-        setSaving(false)
-        return
-      }
-
       setMessage({ type: 'success', text: 'Prato adicionado!' })
     }
 
     resetForm()
     await loadData()
     setSaving(false)
-  }
-
-  async function upsertRule(benefitId: string): Promise<string | null> {
-    if (!restaurantId) return 'Restaurant ID ausente'
-
-    // Build rule from per-day config
-    const enabledDays = Object.entries(formDayRules)
-      .filter(([, r]) => r.enabled)
-      .map(([d]) => Number(d))
-      .sort()
-    // Use first enabled day's hours as primary (DB stores 1 rule per benefit)
-    const firstEnabled = Object.entries(formDayRules).find(([, r]) => r.enabled)
-    const primaryStart = firstEnabled ? firstEnabled[1].start : '11:00'
-    const primaryEnd = firstEnabled ? firstEnabled[1].end : '22:00'
-
-    const ruleData = {
-      restaurant_id: restaurantId,
-      benefit_id: benefitId,
-      available_days: enabledDays,
-      available_hours_start: primaryStart,
-      available_hours_end: primaryEnd,
-      daily_limit: formRuleLimit,
-      is_active: true,
-    }
-
-    const existingRule = rulesMap[benefitId]
-    if (existingRule) {
-      const { error } = await supabase.from('benefit_rules').update(ruleData).eq('id', existingRule.id)
-      if (error) return error.message
-    } else {
-      const { error } = await supabase.from('benefit_rules').insert(ruleData)
-      if (error) return error.message
-    }
-    return null
   }
 
   async function toggleBenefit(id: string, currentActive: boolean) {
@@ -406,14 +399,10 @@ export default function BenefitsPage() {
   }
 
   async function deleteBenefit(id: string) {
-    // Clean up photo from Storage if exists
     const benefit = benefits.find((b) => b.id === id)
     if (benefit?.photo_url) {
-      const url = benefit.photo_url
-      const match = url.match(/restaurant-photos\/(.+)$/)
-      if (match) {
-        await supabase.storage.from('restaurant-photos').remove([match[1]])
-      }
+      const match = benefit.photo_url.match(/restaurant-photos\/(.+)$/)
+      if (match) await supabase.storage.from('restaurant-photos').remove([match[1]])
     }
 
     const { error } = await supabase.from('benefits').delete().eq('id', id)
@@ -425,7 +414,6 @@ export default function BenefitsPage() {
     }
     setDeletingId(null)
   }
-
 
   if (loading) {
     return (
@@ -445,15 +433,17 @@ export default function BenefitsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Cardapio +um</h1>
-          <p className="text-neutral-600">Cadastre os pratos e configure as regras de cada promocao</p>
+          <h1 className="text-2xl font-bold text-neutral-900">Pratos</h1>
+          <p className="text-neutral-600">Cadastre pratos e defina uma disponibilidade unica para todos.</p>
         </div>
         {!showForm && (
           <button
-            onClick={() => { resetForm(); setShowForm(true) }}
+            onClick={() => {
+              resetForm()
+              setShowForm(true)
+            }}
             className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
           >
             + Novo Prato
@@ -461,7 +451,6 @@ export default function BenefitsPage() {
         )}
       </div>
 
-      {/* Message */}
       {message && (
         <div className={`rounded-lg px-4 py-3 text-sm ${
           message.type === 'success'
@@ -472,7 +461,112 @@ export default function BenefitsPage() {
         </div>
       )}
 
-      {/* Form — Create / Edit */}
+      <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900">Regras de Disponibilidade</h2>
+            <p className="text-sm text-neutral-500">Esses dias, horarios e limites valem para todos os pratos ativos.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setAvailabilitySlots((current) => [
+                ...current,
+                { days: [], start: '11:00', end: '22:00', dailyLimit: 20 },
+              ])
+            }
+            className="rounded-lg border border-orange-300 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50"
+          >
+            + Adicionar faixa
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {availabilitySlots.map((slot, idx) => (
+            <div key={idx} className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-semibold text-neutral-700">Faixa {idx + 1}</span>
+                {availabilitySlots.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setAvailabilitySlots((current) => current.filter((_, i) => i !== idx))}
+                    className="text-xs font-medium text-red-600 hover:text-red-700"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((day) => (
+                  <button
+                    key={day.value}
+                    type="button"
+                    onClick={() => toggleSlotDay(idx, day.value)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                      slot.days.includes(day.value)
+                        ? 'bg-orange-600 text-white'
+                        : 'border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-500">Inicio</label>
+                  <input
+                    type="time"
+                    value={slot.start}
+                    onChange={(e) => updateAvailabilitySlot(idx, { start: e.target.value })}
+                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-500">Fim</label>
+                  <input
+                    type="time"
+                    value={slot.end}
+                    onChange={(e) => updateAvailabilitySlot(idx, { end: e.target.value })}
+                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-500">Limite diario</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={slot.dailyLimit}
+                    onChange={(e) => updateAvailabilitySlot(idx, { dailyLimit: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-neutral-500">
+            Resumo: {availabilitySlots
+              .filter((slot) => slot.days.length > 0)
+              .map((slot) => `${formatDaysSummary(slot.days)} ${slot.start}-${slot.end} Max ${slot.dailyLimit}/dia`)
+              .join(' | ') || 'Nenhuma disponibilidade configurada'}
+          </p>
+          <button
+            type="button"
+            onClick={saveAvailability}
+            disabled={savingAvailability}
+            className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+          >
+            {savingAvailability ? 'Salvando...' : 'Salvar regras'}
+          </button>
+        </div>
+      </section>
+
       {showForm && (
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-neutral-800">
@@ -480,7 +574,6 @@ export default function BenefitsPage() {
           </h2>
 
           <form onSubmit={handleSave} className="space-y-6">
-            {/* Photo Upload */}
             <div>
               <label className="mb-2 block text-sm font-medium text-neutral-700">Foto do Prato</label>
               <div className="flex items-center gap-4">
@@ -489,7 +582,11 @@ export default function BenefitsPage() {
                     <img src={formPhotoPreview} alt="Preview" className="h-full w-full object-cover" />
                     <button
                       type="button"
-                      onClick={() => { setFormPhotoFile(null); setFormPhotoPreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                      onClick={() => {
+                        setFormPhotoFile(null)
+                        setFormPhotoPreview(null)
+                        if (fileInputRef.current) fileInputRef.current.value = ''
+                      }}
                       className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white"
                     >
                       x
@@ -503,18 +600,11 @@ export default function BenefitsPage() {
                     <span className="text-2xl">+</span>
                   </div>
                 )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoChange}
-                  className="hidden"
-                />
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
                 <p className="text-xs text-neutral-500">JPG, PNG ou WebP. Max 5MB.</p>
               </div>
             </div>
 
-            {/* Name + Category */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Nome do Prato *</label>
@@ -531,7 +621,7 @@ export default function BenefitsPage() {
                 <select
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value as BenefitCategory)}
-                  className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c.value} value={c.value}>{c.label}</option>
@@ -540,7 +630,6 @@ export default function BenefitsPage() {
               </div>
             </div>
 
-            {/* Description */}
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">Descricao</label>
               <textarea
@@ -552,7 +641,6 @@ export default function BenefitsPage() {
               />
             </div>
 
-            {/* Price + Promo */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Preco Original</label>
@@ -563,20 +651,22 @@ export default function BenefitsPage() {
                   placeholder="Ex: 45,90"
                   className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
-                <p className="mt-1 text-xs text-neutral-400">O cliente ve o valor para entender o beneficio</p>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-neutral-700">Promocao *</label>
+                <label className="mb-2 block text-sm font-medium text-neutral-700">Oferta *</label>
                 <div className="space-y-2">
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
                       type="radio"
                       name="promoType"
                       checked={formPromoType === 'leve2pague1'}
-                      onChange={() => { setFormPromoType('leve2pague1'); setFormPromoCustom('') }}
+                      onChange={() => {
+                        setFormPromoType('leve2pague1')
+                        setFormPromoCustom('')
+                      }}
                       className="h-4 w-4 accent-orange-600"
                     />
-                    <span className="text-sm text-neutral-700 font-medium">Leve 2, pague 1</span>
+                    <span className="text-sm font-medium text-neutral-700">Leve 2, pague 1</span>
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -589,119 +679,18 @@ export default function BenefitsPage() {
                     <span className="text-sm text-neutral-600">Outro</span>
                   </label>
                   {formPromoType === 'outro' && (
-                    <div className="ml-6">
-                      <input
-                        type="text"
-                        value={formPromoCustom}
-                        onChange={(e) => setFormPromoCustom(e.target.value)}
-                        placeholder="Descreva a promocao (sujeita a aprovacao)"
-                        className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                      />
-                      <p className="mt-1 text-xs text-amber-600">Promocoes personalizadas precisam de aprovacao do admin +um</p>
-                    </div>
+                    <input
+                      type="text"
+                      value={formPromoCustom}
+                      onChange={(e) => setFormPromoCustom(e.target.value)}
+                      placeholder="Descreva a oferta"
+                      className="ml-6 h-9 w-[calc(100%-1.5rem)] rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Availability Rules — Per Day */}
-            <div className="rounded-lg border border-neutral-100 bg-neutral-50 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-neutral-800">Regras de Disponibilidade</h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const first = Object.values(formDayRules).find(d => d.enabled)
-                    if (!first) return
-                    const updated = { ...formDayRules }
-                    for (let d = 0; d < 7; d++) {
-                      updated[d] = { enabled: true, start: first.start, end: first.end }
-                    }
-                    setFormDayRules(updated)
-                  }}
-                  className="rounded-md bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-200"
-                >
-                  Mesmo horario para todos os dias
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {WEEKDAYS.map((day) => {
-                  const rule = formDayRules[day.value]
-                  return (
-                    <div key={day.value} className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
-                      rule.enabled ? 'border-orange-200 bg-white' : 'border-neutral-200 bg-neutral-100 opacity-60'
-                    }`}>
-                      {/* Toggle */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = { ...formDayRules }
-                          updated[day.value] = { ...rule, enabled: !rule.enabled }
-                          setFormDayRules(updated)
-                        }}
-                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                          rule.enabled ? 'bg-orange-600' : 'bg-neutral-300'
-                        }`}
-                      >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                          rule.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                        }`} />
-                      </button>
-
-                      {/* Day label */}
-                      <span className={`w-10 text-sm font-medium ${rule.enabled ? 'text-neutral-800' : 'text-neutral-400'}`}>
-                        {day.label}
-                      </span>
-
-                      {/* Time inputs */}
-                      {rule.enabled ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="time"
-                            value={rule.start}
-                            onChange={(e) => {
-                              const updated = { ...formDayRules }
-                              updated[day.value] = { ...rule, start: e.target.value }
-                              setFormDayRules(updated)
-                            }}
-                            className="h-7 rounded border border-neutral-300 px-2 text-xs focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                          />
-                          <span className="text-xs text-neutral-400">ate</span>
-                          <input
-                            type="time"
-                            value={rule.end}
-                            onChange={(e) => {
-                              const updated = { ...formDayRules }
-                              updated[day.value] = { ...rule, end: e.target.value }
-                              setFormDayRules(updated)
-                            }}
-                            className="h-7 rounded border border-neutral-300 px-2 text-xs focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                          />
-                        </div>
-                      ) : (
-                        <span className="text-xs text-neutral-400">Indisponivel</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Daily limit */}
-              <div className="mt-4">
-                <label className="mb-1 block text-xs font-medium text-neutral-600">Limite Diario de Cupons</label>
-                <input
-                  type="number"
-                  value={formRuleLimit}
-                  onChange={(e) => setFormRuleLimit(Math.max(1, parseInt(e.target.value) || 1))}
-                  min={1}
-                  max={999}
-                  className="h-9 w-32 rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                />
-              </div>
-            </div>
-
-            {/* Buttons */}
             <div className="flex items-center gap-3">
               <button
                 type="submit"
@@ -722,7 +711,6 @@ export default function BenefitsPage() {
         </div>
       )}
 
-      {/* Benefits Cards */}
       {benefits.length === 0 ? (
         <div className="rounded-lg border border-neutral-200 bg-white px-6 py-12 text-center shadow-sm">
           <p className="text-lg text-neutral-500">Nenhum prato cadastrado ainda</p>
@@ -732,114 +720,94 @@ export default function BenefitsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {benefits.map((benefit) => {
-            const rule = rulesMap[benefit.id]
-            return (
-              <div
-                key={benefit.id}
-                className={`overflow-hidden rounded-lg border bg-white shadow-sm transition-opacity ${
-                  benefit.is_active ? 'border-neutral-200' : 'border-neutral-100 opacity-60'
-                }`}
-              >
-                {/* Photo */}
-                {benefit.photo_url ? (
-                  <div className="h-40 w-full overflow-hidden bg-neutral-100">
-                    <img src={benefit.photo_url} alt={benefit.name} className="h-full w-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="flex h-28 w-full items-center justify-center bg-neutral-100">
-                    <span className="text-3xl">
-                      {benefit.category === 'prato' ? '🍽️' : benefit.category === 'drink' ? '🥤' : benefit.category === 'sobremesa' ? '🍰' : '🎁'}
-                    </span>
-                  </div>
-                )}
+          {benefits.map((benefit) => (
+            <div
+              key={benefit.id}
+              className={`overflow-hidden rounded-lg border bg-white shadow-sm transition-opacity ${
+                benefit.is_active ? 'border-neutral-200' : 'border-neutral-100 opacity-60'
+              }`}
+            >
+              {benefit.photo_url ? (
+                <div className="h-40 w-full overflow-hidden bg-neutral-100">
+                  <img src={benefit.photo_url} alt={benefit.name} className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="flex h-28 w-full items-center justify-center bg-neutral-100 text-sm text-neutral-400">
+                  Sem foto
+                </div>
+              )}
 
-                {/* Content */}
-                <div className="p-4">
-                  <div className="mb-2 flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-neutral-900">{benefit.name}</h3>
-                      {benefit.description && (
-                        <p className="mt-0.5 text-sm text-neutral-500 line-clamp-2">{benefit.description}</p>
-                      )}
-                    </div>
-                    <span className={`ml-2 inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[benefit.category]}`}>
-                      {CATEGORIES.find((c) => c.value === benefit.category)?.label}
-                    </span>
-                  </div>
-
-                  {/* Price + Promo */}
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    {benefit.original_price && (
-                      <span className="text-sm font-semibold text-orange-600">{formatPrice(benefit.original_price)}</span>
-                    )}
-                    {benefit.promo_description && (
-                      <span className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-                        {benefit.promo_description}
-                      </span>
+              <div className="p-4">
+                <div className="mb-2 flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-neutral-900">{benefit.name}</h3>
+                    {benefit.description && (
+                      <p className="mt-0.5 line-clamp-2 text-sm text-neutral-500">{benefit.description}</p>
                     )}
                   </div>
+                  <span className={`ml-2 inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[benefit.category]}`}>
+                    {CATEGORIES.find((c) => c.value === benefit.category)?.label}
+                  </span>
+                </div>
 
-                  {/* Rules Summary */}
-                  {rule && (
-                    <div className="mb-3 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-                      <span className="font-medium">{formatDaysSummary(rule.available_days)}</span>
-                      {' · '}
-                      {rule.available_hours_start?.substring(0, 5)} - {rule.available_hours_end?.substring(0, 5)}
-                      {' · '}
-                      Max {rule.daily_limit}/dia
-                    </div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {benefit.original_price && (
+                    <span className="text-sm font-semibold text-orange-600">{formatPrice(benefit.original_price)}</span>
                   )}
+                  {benefit.promo_description && (
+                    <span className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                      {benefit.promo_description}
+                    </span>
+                  )}
+                </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
+                <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
+                  <button
+                    onClick={() => toggleBenefit(benefit.id, benefit.is_active)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      benefit.is_active ? 'bg-orange-600' : 'bg-neutral-300'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      benefit.is_active ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => toggleBenefit(benefit.id, benefit.is_active)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        benefit.is_active ? 'bg-orange-600' : 'bg-neutral-300'
-                      }`}
+                      onClick={() => startEdit(benefit)}
+                      className="rounded px-2 py-1 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100"
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        benefit.is_active ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
+                      Editar
                     </button>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => startEdit(benefit)}
-                        className="rounded px-2 py-1 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100"
-                      >
-                        Editar
-                      </button>
-                      {deletingId === benefit.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => deleteBenefit(benefit.id)}
-                            className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                          >
-                            Confirmar
-                          </button>
-                          <button
-                            onClick={() => setDeletingId(null)}
-                            className="rounded px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100"
-                          >
-                            Nao
-                          </button>
-                        </div>
-                      ) : (
+                    {deletingId === benefit.id ? (
+                      <div className="flex items-center gap-1">
                         <button
-                          onClick={() => setDeletingId(benefit.id)}
-                          className="rounded px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
+                          onClick={() => deleteBenefit(benefit.id)}
+                          className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
                         >
-                          Excluir
+                          Confirmar
                         </button>
-                      )}
-                    </div>
+                        <button
+                          onClick={() => setDeletingId(null)}
+                          className="rounded px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100"
+                        >
+                          Nao
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeletingId(benefit.id)}
+                        className="rounded px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
+                      >
+                        Excluir
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>

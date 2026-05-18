@@ -141,22 +141,7 @@ export default function ProfilePage() {
   const [cep, setCep] = useState('')
   const [cepLookup, setCepLookup] = useState<CepLookupState>({ status: 'idle' })
   const [activeCities, setActiveCities] = useState<ActiveCity[]>([])
-  interface HoursSlot { days: number[]; open: string; close: string }
-  const [hoursSlots, setHoursSlots] = useState<HoursSlot[]>([
-    { days: [1, 2, 3, 4, 5], open: '11:00', close: '22:00' },
-    { days: [0, 6], open: '11:00', close: '23:00' },
-  ])
   const [photos, setPhotos] = useState<string[]>([])
-
-  const WEEKDAYS = [
-    { value: 0, label: 'Dom' },
-    { value: 1, label: 'Seg' },
-    { value: 2, label: 'Ter' },
-    { value: 3, label: 'Qua' },
-    { value: 4, label: 'Qui' },
-    { value: 5, label: 'Sex' },
-    { value: 6, label: 'Sab' },
-  ]
 
   const CUISINE_CATEGORIES = [
     { value: 'pizzaria', label: 'Pizzaria 🍕' },
@@ -171,22 +156,6 @@ export default function ProfilePage() {
     { value: 'espetinho', label: 'Espetinho 🍢' },
     { value: 'outros', label: 'Outros 🍽️' },
   ]
-
-  function hoursToString(slots: HoursSlot[]): string {
-    return slots
-      .filter(s => s.days.length > 0)
-      .map(s => {
-        const dayLabels = s.days.map(d => WEEKDAYS[d]?.label).join(', ')
-        return `${dayLabels} ${s.open}-${s.close}`
-      })
-      .join(' | ')
-  }
-
-  function parseHoursString(str: string): HoursSlot[] {
-    if (!str || str.trim() === '') return [{ days: [1, 2, 3, 4, 5], open: '11:00', close: '22:00' }]
-    // Keep existing slots if already parsed, otherwise return default
-    return hoursSlots
-  }
 
   const supabase = createClient()
 
@@ -287,10 +256,6 @@ export default function ProfilePage() {
       setWhatsapp(data.whatsapp || '')
       setInstagramUrl(data.instagram_url || '')
       setCuisineType(data.cuisine_type || '')
-      // Parse hours_of_operation or use defaults
-      if (data.hours_of_operation) {
-        // Keep parsed slots
-      }
       setLogoUrl(data.logo_url || null)
       setPhotos(data.photos || [])
       // MAISUM-RW-1.13: load existing CEP + trigger lookup to display detected city
@@ -366,8 +331,6 @@ export default function ProfilePage() {
         is_active: true, // Garante que o restaurante fique ativo ao salvar as alterações
       })
       .eq('id', restaurant.id)
-
-    // Note: hours_of_operation stored as formatted string for now
 
     if (error) {
       setMessage({ type: 'error', text: `Erro ao salvar: ${error.message}` })
@@ -766,100 +729,6 @@ export default function ProfilePage() {
             </div>
 
           </div>
-        </div>
-
-        {/* Hours of Operation */}
-        <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-neutral-800">Horario de Funcionamento</h2>
-            {hoursSlots.length < 4 && (
-              <button
-                type="button"
-                onClick={() => setHoursSlots([...hoursSlots, { days: [], open: '11:00', close: '22:00' }])}
-                className="text-xs font-medium text-orange-600 hover:text-orange-700"
-              >
-                + Adicionar faixa
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {hoursSlots.map((slot, idx) => (
-              <div key={idx} className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-neutral-500">
-                    {idx === 0 ? 'Dias de semana' : idx === 1 ? 'Finais de semana' : `Faixa ${idx + 1}`}
-                  </span>
-                  {hoursSlots.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setHoursSlots(hoursSlots.filter((_, i) => i !== idx))}
-                      className="text-xs text-red-500 hover:text-red-600"
-                    >
-                      Remover
-                    </button>
-                  )}
-                </div>
-
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {WEEKDAYS.map((day) => (
-                    <button
-                      key={day.value}
-                      type="button"
-                      onClick={() => {
-                        const updated = [...hoursSlots]
-                        const s = updated[idx]
-                        s.days = s.days.includes(day.value)
-                          ? s.days.filter((d) => d !== day.value)
-                          : [...s.days, day.value].sort()
-                        setHoursSlots(updated)
-                      }}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                        slot.days.includes(day.value)
-                          ? 'bg-orange-600 text-white'
-                          : 'border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50'
-                      }`}
-                    >
-                      {day.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-500">Abre</label>
-                    <input
-                      type="time"
-                      value={slot.open}
-                      onChange={(e) => {
-                        const updated = [...hoursSlots]
-                        updated[idx].open = e.target.value
-                        setHoursSlots(updated)
-                      }}
-                      className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-500">Fecha</label>
-                    <input
-                      type="time"
-                      value={slot.close}
-                      onChange={(e) => {
-                        const updated = [...hoursSlots]
-                        updated[idx].close = e.target.value
-                        setHoursSlots(updated)
-                      }}
-                      className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <p className="mt-3 text-xs text-neutral-400">
-            Resumo: {hoursToString(hoursSlots) || 'Nenhum horario configurado'}
-          </p>
         </div>
 
         {/* Social & Web */}
