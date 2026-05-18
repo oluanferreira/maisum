@@ -3,21 +3,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  ChartBar,
   Gift,
   QrCode,
-  ShareNetwork,
   UserCircle,
   SignOut,
 } from '@phosphor-icons/react'
 import { createClient } from '@/../lib/supabase/client'
 
 const navItems = [
-  { href: '/validate', label: 'Validar cupom', icon: QrCode },
-  { href: '/benefits', label: 'Pratos e promocoes', icon: Gift },
+  { href: '/validate', label: 'Validar', icon: QrCode },
+  { href: '/benefits', label: 'Pratos', icon: Gift },
   { href: '/profile', label: 'Perfil', icon: UserCircle },
-  { href: '/', label: 'Historico', icon: ChartBar },
-  { href: '/kit', label: 'Kit e ajuda', icon: ShareNetwork },
 ]
 
 export function Sidebar() {
