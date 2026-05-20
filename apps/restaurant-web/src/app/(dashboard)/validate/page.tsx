@@ -18,6 +18,12 @@ interface TodayValidation {
   profiles: { full_name: string | null } | null
 }
 
+const COUPON_CODE_PATTERN = /^[A-Z0-9]{6}$/
+
+function normalizeCouponCode(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+}
+
 // --- Page ---
 export default function ValidatePage() {
   const supabase = createClient()
@@ -41,7 +47,9 @@ export default function ValidatePage() {
           .from('restaurants')
           .select('id')
           .eq('admin_user_id', user.id)
-          .single()
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle()
 
         if (restaurant) {
           setRestaurantId(restaurant.id)
@@ -79,19 +87,26 @@ export default function ValidatePage() {
 
   // Validate coupon
   const handleValidate = useCallback(async () => {
-    if (!manualCode.trim() || !restaurantId) return
+    const couponCode = normalizeCouponCode(manualCode)
+    if (!couponCode || !restaurantId) return
+
+    if (!COUPON_CODE_PATTERN.test(couponCode)) {
+      setResult({ valid: false, reason: 'Codigo deve ter 6 letras ou numeros' })
+      return
+    }
 
     setValidating(true)
     setResult(null)
 
     try {
-      const { data, error } = await supabase.rpc('validate_coupon', {
-        p_coupon_id: manualCode.trim(),
+      const { data, error } = await supabase.rpc('validate_coupon_by_code', {
+        p_short_code: couponCode,
         p_restaurant_id: restaurantId,
       })
 
       if (error) {
-        setResult({ valid: false, reason: error.message })
+        console.error('Error validating coupon:', error)
+        setResult({ valid: false, reason: 'Nao foi possivel validar agora. Tente novamente.' })
       } else {
         setResult(data as ValidationResult)
         // Refresh today's list on success
@@ -100,13 +115,14 @@ export default function ValidatePage() {
             eventName: 'experience_validated',
             pathname: '/validate',
             restaurantId,
-            couponId: data.coupon_id ?? manualCode.trim(),
+            couponId: data.coupon_id ?? couponCode,
             metadata: { inputMode: 'manual' },
           })
           await loadTodayValidations(restaurantId)
         }
       }
     } catch (err) {
+      console.error('Unexpected coupon validation failure:', err)
       setResult({ valid: false, reason: 'Erro ao validar cupom' })
     } finally {
       setValidating(false)
@@ -155,20 +171,24 @@ export default function ValidatePage() {
             id="coupon-code"
             type="text"
             value={manualCode}
-            onChange={(e) => setManualCode(e.target.value)}
+            onChange={(e) => setManualCode(normalizeCouponCode(e.target.value))}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
                 void handleValidate()
               }
             }}
-            placeholder="Cole ou digite o codigo/ID do cupom"
+            placeholder="Ex.: J7264G"
+            inputMode="text"
+            maxLength={32}
+            autoCapitalize="characters"
+            autoComplete="off"
             className="h-14 flex-1 rounded-lg border border-neutral-300 px-4 text-base text-neutral-900 placeholder-neutral-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
           <button
             type="button"
             onClick={handleValidate}
-            disabled={validating || !manualCode.trim() || !restaurantId}
+            disabled={validating || !COUPON_CODE_PATTERN.test(normalizeCouponCode(manualCode)) || !restaurantId}
             className="h-14 rounded-lg bg-orange-500 px-8 text-base font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[140px]"
           >
             {validating ? 'Validando...' : 'Validar'}

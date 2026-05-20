@@ -182,11 +182,14 @@ export type Database = {
           hmac_signature: string
           id: string
           restaurant_id: string | null
+          short_code: string | null
+          short_code_expires_at: string | null
           source: Database["public"]["Enums"]["coupon_source"] | null
           status: Database["public"]["Enums"]["coupon_status"] | null
           subscription_id: string | null
           used_at: string | null
           user_id: string
+          validated_by: string | null
         }
         Insert: {
           created_at?: string | null
@@ -194,11 +197,14 @@ export type Database = {
           hmac_signature?: string
           id?: string
           restaurant_id?: string | null
+          short_code?: string | null
+          short_code_expires_at?: string | null
           source?: Database["public"]["Enums"]["coupon_source"] | null
           status?: Database["public"]["Enums"]["coupon_status"] | null
           subscription_id?: string | null
           used_at?: string | null
           user_id: string
+          validated_by?: string | null
         }
         Update: {
           created_at?: string | null
@@ -206,11 +212,14 @@ export type Database = {
           hmac_signature?: string
           id?: string
           restaurant_id?: string | null
+          short_code?: string | null
+          short_code_expires_at?: string | null
           source?: Database["public"]["Enums"]["coupon_source"] | null
           status?: Database["public"]["Enums"]["coupon_status"] | null
           subscription_id?: string | null
           used_at?: string | null
           user_id?: string
+          validated_by?: string | null
         }
         Relationships: [
           {
@@ -793,10 +802,22 @@ export type Database = {
         Args: { p_coupon_id: string; p_restaurant_id: string }
         Returns: Json
       }
+      validate_coupon_by_code: {
+        Args: { p_restaurant_id: string; p_short_code: string }
+        Returns: Json
+      }
     }
     Enums: {
       benefit_category: "prato" | "drink" | "sobremesa" | "combo"
-      coupon_source: "subscription" | "referral" | "review" | "social"
+      coupon_source:
+        | "subscription"
+        | "referral"
+        | "review"
+        | "social"
+        | "purchase"
+        | "partner_token"
+        | "backfill"
+        | "admin"
       coupon_status: "available" | "used" | "expired"
       payment_method: "pix" | "credit_card" | "boleto"
       payment_status: "pending" | "paid" | "failed" | "refunded"
@@ -934,7 +955,16 @@ export const Constants = {
   public: {
     Enums: {
       benefit_category: ["prato", "drink", "sobremesa", "combo"],
-      coupon_source: ["subscription", "referral", "review", "social"],
+      coupon_source: [
+        "subscription",
+        "referral",
+        "review",
+        "social",
+        "purchase",
+        "partner_token",
+        "backfill",
+        "admin",
+      ],
       coupon_status: ["available", "used", "expired"],
       payment_method: ["pix", "credit_card", "boleto"],
       payment_status: ["pending", "paid", "failed", "refunded"],
