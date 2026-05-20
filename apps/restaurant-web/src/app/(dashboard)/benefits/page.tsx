@@ -258,7 +258,11 @@ export default function BenefitsPage() {
       .eq('restaurant_id', restaurantId)
 
     if (deleteError) {
-      setMessage({ type: 'error', text: `Erro ao limpar regras antigas: ${deleteError.message}` })
+      console.error('[availability-save] cleanup failed', {
+        code: deleteError.code,
+        hint: deleteError.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel salvar as regras. Tente novamente.' })
       setSavingAvailability(false)
       return
     }
@@ -276,7 +280,11 @@ export default function BenefitsPage() {
     const { error: insertError } = await supabase.from('benefit_rules').insert(rows)
 
     if (insertError) {
-      setMessage({ type: 'error', text: `Erro ao salvar disponibilidade: ${insertError.message}` })
+      console.error('[availability-save] insert failed', {
+        code: insertError.code,
+        hint: insertError.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel salvar as regras. Tente novamente.' })
       setSavingAvailability(false)
       return
     }
@@ -296,7 +304,7 @@ export default function BenefitsPage() {
     if (!file) return
 
     if (file.size > 5 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'Imagem deve ter no maximo 5MB' })
+      setMessage({ type: 'error', text: 'A imagem deve ter no maximo 5MB.' })
       return
     }
 
@@ -317,12 +325,15 @@ export default function BenefitsPage() {
       .upload(filePath, formPhotoFile, { upsert: true })
 
     if (error) {
-      console.error('Upload error:', error)
+      console.error('[benefit-photo-upload] storage error', {
+        code: error.name,
+        hint: error.message,
+      })
       return null
     }
 
     const { data } = supabase.storage.from('restaurant-photos').getPublicUrl(filePath)
-    return data.publicUrl
+    return `${data.publicUrl}?v=${Date.now()}`
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -356,7 +367,7 @@ export default function BenefitsPage() {
       if (formPhotoFile) {
         const photoUrl = await uploadPhoto(editingId)
         if (!photoUrl) {
-          setMessage({ type: 'error', text: 'Erro ao enviar foto. Tente novamente.' })
+          setMessage({ type: 'error', text: 'Nao foi possivel enviar a foto. Tente novamente.' })
           setSaving(false)
           return
         }
@@ -365,12 +376,16 @@ export default function BenefitsPage() {
 
       const { error } = await supabase.from('benefits').update(updateData).eq('id', editingId)
       if (error) {
-        setMessage({ type: 'error', text: `Erro ao atualizar: ${error.message}` })
+        console.error('[benefit-save] update failed', {
+          code: error.code,
+          hint: error.message,
+        })
+        setMessage({ type: 'error', text: 'Nao foi possivel atualizar o prato. Tente novamente.' })
         setSaving(false)
         return
       }
 
-      setMessage({ type: 'success', text: 'Prato atualizado!' })
+      setMessage({ type: 'success', text: 'Prato atualizado.' })
     } else {
       const { data: newBenefit, error } = await supabase
         .from('benefits')
@@ -379,7 +394,11 @@ export default function BenefitsPage() {
         .single()
 
       if (error || !newBenefit) {
-        setMessage({ type: 'error', text: `Erro ao criar: ${error?.message}` })
+        console.error('[benefit-save] create failed', {
+          code: error?.code,
+          hint: error?.message,
+        })
+        setMessage({ type: 'error', text: 'Nao foi possivel criar o prato. Tente novamente.' })
         setSaving(false)
         return
       }
@@ -389,7 +408,7 @@ export default function BenefitsPage() {
         if (photoUrl) {
           await supabase.from('benefits').update({ photo_url: photoUrl }).eq('id', newBenefit.id)
         } else {
-          setMessage({ type: 'error', text: 'Prato criado, mas a foto nao foi enviada. Edite para tentar novamente.' })
+          setMessage({ type: 'error', text: 'Prato salvo, mas a foto nao foi enviada. Edite o prato para tentar de novo.' })
           resetForm()
           await loadData()
           setSaving(false)
@@ -397,7 +416,7 @@ export default function BenefitsPage() {
         }
       }
 
-      setMessage({ type: 'success', text: 'Prato adicionado!' })
+      setMessage({ type: 'success', text: 'Prato adicionado.' })
     }
 
     resetForm()
@@ -408,7 +427,11 @@ export default function BenefitsPage() {
   async function toggleBenefit(id: string, currentActive: boolean) {
     const { error } = await supabase.from('benefits').update({ is_active: !currentActive }).eq('id', id)
     if (error) {
-      setMessage({ type: 'error', text: `Erro: ${error.message}` })
+      console.error('[benefit-toggle] update failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel alterar o status do prato. Tente novamente.' })
       return
     }
     setBenefits((prev) => prev.map((b) => (b.id === id ? { ...b, is_active: !currentActive } : b)))
@@ -423,10 +446,14 @@ export default function BenefitsPage() {
 
     const { error } = await supabase.from('benefits').delete().eq('id', id)
     if (error) {
-      setMessage({ type: 'error', text: `Erro ao deletar: ${error.message}` })
+      console.error('[benefit-delete] delete failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel excluir o prato. Tente novamente.' })
     } else {
       setBenefits((prev) => prev.filter((b) => b.id !== id))
-      setMessage({ type: 'success', text: 'Prato removido!' })
+      setMessage({ type: 'success', text: 'Prato removido.' })
     }
     setDeletingId(null)
   }
@@ -452,7 +479,7 @@ export default function BenefitsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Pratos</h1>
-          <p className="text-neutral-600">Cadastre pratos e defina uma disponibilidade unica para todos.</p>
+          <p className="text-neutral-600">Cadastre pratos e defina uma disponibilidade unica para todos os pratos ativos.</p>
         </div>
         {!showForm && (
           <button
@@ -462,13 +489,13 @@ export default function BenefitsPage() {
             }}
             className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
           >
-            + Novo Prato
+            Novo prato
           </button>
         )}
       </div>
 
       {message && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${
+        <div role={message.type === 'error' ? 'alert' : 'status'} className={`rounded-lg px-4 py-3 text-sm ${
           message.type === 'success'
             ? 'border border-green-200 bg-green-50 text-green-800'
             : 'border border-red-200 bg-red-50 text-red-800'
@@ -480,7 +507,7 @@ export default function BenefitsPage() {
       <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
         <div className="mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-neutral-900">Regras de Disponibilidade</h2>
+            <h2 className="text-lg font-semibold text-neutral-900">Regras de disponibilidade</h2>
             <p className="text-sm text-neutral-500">Esses dias, horarios e limites valem para todos os pratos ativos.</p>
           </div>
         </div>
@@ -556,7 +583,7 @@ export default function BenefitsPage() {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-neutral-500">
-            Resumo: {availabilityRules
+            Disponibilidade: {availabilityRules
               .filter((rule) => rule.enabled)
               .map((rule) => `${getWeekdayLabel(rule.day)} ${rule.start}-${rule.end} Max ${rule.dailyLimit}/dia`)
               .join(' | ') || 'Nenhuma disponibilidade configurada'}
@@ -575,18 +602,19 @@ export default function BenefitsPage() {
       {showForm && (
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-neutral-800">
-            {editingId ? 'Editar Prato' : 'Novo Prato'}
+            {editingId ? 'Editar prato' : 'Novo prato'}
           </h2>
 
           <form onSubmit={handleSave} className="space-y-6">
             <div>
-              <label className="mb-2 block text-sm font-medium text-neutral-700">Foto do Prato</label>
+              <label className="mb-2 block text-sm font-medium text-neutral-700">Foto do prato</label>
               <div className="flex items-center gap-4">
                 {formPhotoPreview ? (
                   <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-200">
                     <img src={formPhotoPreview} alt="Preview" className="h-full w-full object-cover" />
                     <button
                       type="button"
+                      aria-label="Remover foto do prato"
                       onClick={() => {
                         setFormPhotoFile(null)
                         setFormPhotoPreview(null)
@@ -598,12 +626,14 @@ export default function BenefitsPage() {
                     </button>
                   </div>
                 ) : (
-                  <div
+                  <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:text-orange-500"
+                    aria-label="Adicionar foto do prato"
                   >
                     <span className="text-2xl">+</span>
-                  </div>
+                  </button>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
                 <p className="text-xs text-neutral-500">JPG, PNG ou WebP. Max 5MB.</p>
@@ -612,7 +642,7 @@ export default function BenefitsPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Nome do Prato *</label>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Nome do prato *</label>
                 <input
                   type="text"
                   value={formName}
@@ -648,7 +678,7 @@ export default function BenefitsPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Preco Original</label>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Preco original</label>
                 <input
                   type="text"
                   value={formOriginalPrice}
@@ -702,7 +732,7 @@ export default function BenefitsPage() {
                 disabled={saving}
                 className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
               >
-                {saving ? 'Salvando...' : editingId ? 'Atualizar' : 'Adicionar'}
+                {saving ? 'Salvando...' : editingId ? 'Atualizar prato' : 'Adicionar prato'}
               </button>
               <button
                 type="button"
@@ -720,7 +750,7 @@ export default function BenefitsPage() {
         <div className="rounded-lg border border-neutral-200 bg-white px-6 py-12 text-center shadow-sm">
           <p className="text-lg text-neutral-500">Nenhum prato cadastrado ainda</p>
           <p className="mt-1 text-sm text-neutral-400">
-            Clique em &quot;+ Novo Prato&quot; para comecar a montar seu cardapio +um.
+            Clique em &quot;Novo prato&quot; para comecar a montar seu cardapio +um.
           </p>
         </div>
       ) : (
@@ -768,7 +798,9 @@ export default function BenefitsPage() {
 
                 <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
                   <button
+                    type="button"
                     onClick={() => toggleBenefit(benefit.id, benefit.is_active)}
+                    aria-label={`${benefit.is_active ? 'Desativar' : 'Ativar'} prato ${benefit.name}`}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       benefit.is_active ? 'bg-orange-600' : 'bg-neutral-300'
                     }`}
@@ -780,6 +812,7 @@ export default function BenefitsPage() {
 
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => startEdit(benefit)}
                       className="rounded px-2 py-1 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100"
                     >
@@ -788,20 +821,23 @@ export default function BenefitsPage() {
                     {deletingId === benefit.id ? (
                       <div className="flex items-center gap-1">
                         <button
+                          type="button"
                           onClick={() => deleteBenefit(benefit.id)}
                           className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
                         >
                           Confirmar
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeletingId(null)}
                           className="rounded px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100"
                         >
-                          Nao
+                          Cancelar
                         </button>
                       </div>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => setDeletingId(benefit.id)}
                         className="rounded px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
                       >

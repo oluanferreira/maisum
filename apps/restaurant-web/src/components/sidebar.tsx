@@ -19,94 +19,55 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname()
 
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/'
-    return pathname.startsWith(href)
-  }
+  const isActive = (href: string) => pathname.startsWith(href)
 
   return (
     <aside
-      className="flex h-screen w-64 flex-col justify-between"
-      style={{ backgroundColor: '#1A1A2E', minWidth: 256, maxWidth: 256 }}
+      className="flex w-full flex-col bg-[#1A1A2E] md:h-screen md:w-64 md:min-w-64 md:max-w-64 md:justify-between"
     >
       <div>
-        {/* Logo */}
-        <div className="flex items-center px-5 py-6">
-          <span className="text-2xl font-bold" style={{ color: '#FF6B35' }}>
+        <div className="flex items-center px-4 py-4 md:px-5 md:py-6">
+          <span className="text-xl font-bold text-[#FF6B35] md:text-2xl">
             +um Restaurante
           </span>
         </div>
 
-        {/* Nav Links */}
-        <nav className="mt-2 flex flex-col gap-1 px-3">
+        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:mt-2 md:flex-col md:overflow-visible md:pb-0" aria-label="Navegacao do restaurante">
           {navItems.map((item) => {
             const active = isActive(item.href)
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-3 rounded-lg transition-colors"
-                style={{
-                  height: 44,
-                  paddingLeft: 20,
-                  gap: 12,
-                  borderRadius: 8,
-                  backgroundColor: active ? 'rgba(255,107,53,0.15)' : 'transparent',
-                  color: active ? '#FF6B35' : 'rgba(255,255,255,0.7)',
-                  borderLeft: active ? '3px solid #FF6B35' : '3px solid transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if (!active) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) e.currentTarget.style.backgroundColor = 'transparent'
-                }}
+                aria-current={active ? 'page' : undefined}
+                className={`flex h-11 shrink-0 items-center gap-3 rounded-lg border-l-[3px] px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B35] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1A1A2E] md:pl-5 ${
+                  active
+                    ? 'border-l-[#FF6B35] bg-[#FF6B35]/15 text-[#FF6B35]'
+                    : 'border-l-transparent text-white/70 hover:bg-white/10 hover:text-white'
+                }`}
               >
-                <item.icon size={20} weight={active ? 'fill' : 'regular'} />
-                <span className="text-sm font-medium">{item.label}</span>
+                <item.icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden />
+                <span>{item.label}</span>
               </Link>
             )
           })}
         </nav>
       </div>
 
-      {/* Bottom section */}
       <div className="flex flex-col gap-1 px-3 pb-4">
-        {/* Separator */}
-        <div
-          className="mx-2 mb-2"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}
-        />
+        <div className="mx-2 mb-2 border-t border-white/10" />
 
-        {/* Sign Out */}
         <button
+          type="button"
           onClick={async () => {
             const supabase = createClient()
             await supabase.auth.signOut()
             window.location.href = '/login'
           }}
-          className="flex items-center gap-3 rounded-lg transition-colors"
-          style={{
-            height: 44,
-            paddingLeft: 20,
-            gap: 12,
-            borderRadius: 8,
-            backgroundColor: 'transparent',
-            color: 'rgba(255,255,255,0.7)',
-            borderLeft: '3px solid transparent',
-            border: 'none',
-            cursor: 'pointer',
-            width: '100%',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent'
-          }}
+          className="flex h-11 w-full items-center gap-3 rounded-lg border-l-[3px] border-l-transparent bg-transparent pl-5 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B35] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1A1A2E]"
         >
-          <SignOut size={20} />
-          <span className="text-sm font-medium">Sair</span>
+          <SignOut size={20} aria-hidden />
+          <span>Sair</span>
         </button>
       </div>
     </aside>

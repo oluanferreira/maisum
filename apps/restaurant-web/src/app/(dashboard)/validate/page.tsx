@@ -145,22 +145,14 @@ export default function ValidatePage() {
         </div>
       </div>
 
-      {/* Camera placeholder */}
-      <div className="hidden">
-        <div className="text-center">
-          <div className="text-4xl mb-2">📷</div>
-          <p className="text-neutral-500 font-medium">Scanner QR</p>
-          <p className="text-neutral-400 text-sm mt-1">Requer camera do dispositivo</p>
-        </div>
-      </div>
-
       {/* Manual input */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-neutral-200 mb-6">
-        <label className="block text-sm font-semibold text-neutral-700 mb-2">
+        <label htmlFor="coupon-code" className="block text-sm font-semibold text-neutral-700 mb-2">
           Codigo do cupom
         </label>
         <div className="flex flex-col gap-3 sm:flex-row">
           <input
+            id="coupon-code"
             type="text"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
@@ -174,6 +166,7 @@ export default function ValidatePage() {
             className="h-14 flex-1 rounded-lg border border-neutral-300 px-4 text-base text-neutral-900 placeholder-neutral-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
           <button
+            type="button"
             onClick={handleValidate}
             disabled={validating || !manualCode.trim() || !restaurantId}
             className="h-14 rounded-lg bg-orange-500 px-8 text-base font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[140px]"
@@ -181,18 +174,19 @@ export default function ValidatePage() {
             {validating ? 'Validando...' : 'Validar'}
           </button>
         </div>
-        <p className="mt-3 text-xs text-neutral-500">
-          Scanner de camera fica fora desta fase ate existir leitura real. Esta tela prioriza validacao manual confiavel.
-        </p>
       </div>
 
       {/* Result overlay */}
       {result && (
-        <div className={`rounded-xl p-8 mb-6 text-center animate-fade-in ${
+        <div
+          role={result.valid ? 'status' : 'alert'}
+          aria-live="polite"
+          className={`rounded-xl p-8 mb-6 text-center animate-fade-in ${
           result.valid
             ? 'bg-green-50 border-2 border-green-400'
             : 'bg-red-50 border-2 border-red-400'
-        }`}>
+          }`}
+        >
           <div className={`text-5xl font-bold mb-3 ${
             result.valid ? 'text-green-500' : 'text-red-500'
           }`}>
@@ -201,7 +195,7 @@ export default function ValidatePage() {
           <h2 className={`text-xl font-bold mb-2 ${
             result.valid ? 'text-green-700' : 'text-red-700'
           }`}>
-            {result.valid ? 'Cupom Validado!' : 'Cupom Invalido'}
+            {result.valid ? 'Cupom validado' : 'Cupom invalido'}
           </h2>
           {result.valid && result.user_name && (
             <p className="text-green-600 font-medium">{result.user_name}</p>
@@ -223,7 +217,7 @@ export default function ValidatePage() {
           <ul className="space-y-3">
             {todayValidations.map((v) => (
               <li key={v.id} className="flex items-center gap-3 py-2 border-b border-neutral-100 last:border-0">
-                <span className="text-green-500 text-lg">✓</span>
+                <span className="text-sm font-bold text-green-600" aria-hidden>OK</span>
                 <span className="flex-1 text-neutral-800 font-medium text-sm">
                   {v.profiles?.full_name ?? 'Cliente'}
                 </span>

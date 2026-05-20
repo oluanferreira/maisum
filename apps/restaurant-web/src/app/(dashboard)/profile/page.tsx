@@ -240,8 +240,11 @@ export default function ProfilePage() {
       .single()
 
     if (error) {
-      console.error('Erro ao carregar restaurante:', error)
-      setMessage({ type: 'error', text: 'Erro ao carregar dados do restaurante' })
+      console.error('[profile-load] restaurant load failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel carregar os dados do restaurante.' })
       setLoading(false)
       return
     }
@@ -331,9 +334,13 @@ export default function ProfilePage() {
       .eq('id', restaurant.id)
 
     if (error) {
-      setMessage({ type: 'error', text: `Erro ao salvar: ${error.message}` })
+      console.error('[profile-save] update failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel salvar o perfil. Tente novamente.' })
     } else {
-      setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' })
+      setMessage({ type: 'success', text: 'Perfil atualizado.' })
     }
 
     setSaving(false)
@@ -352,12 +359,15 @@ export default function ProfilePage() {
       .upload(path, file, { upsert: true, contentType: file.type })
 
     if (uploadError) {
-      console.error('[logo-upload] storage error:', uploadError)
+      console.error('[logo-upload] storage error', {
+        name: uploadError.name,
+        hint: uploadError.message,
+      })
       setLastFailedLogoFile(file)
       setLogoUploading(false)
       setMessage({
         type: 'error',
-        text: `Erro ao enviar logomarca: ${uploadError.message}`,
+        text: 'Nao foi possivel enviar a logomarca. Tente novamente.',
         retry: 'logo',
       })
       return
@@ -376,12 +386,15 @@ export default function ProfilePage() {
       .eq('id', restaurant.id)
 
     if (updateError) {
-      console.error('[logo-upload] db update error:', updateError)
+      console.error('[logo-upload] db update error', {
+        code: updateError.code,
+        hint: updateError.message,
+      })
       setLastFailedLogoFile(file)
       setLogoUploading(false)
       setMessage({
         type: 'error',
-        text: `Logomarca enviada, mas falhou ao gravar no banco: ${updateError.message}`,
+        text: 'Logomarca enviada, mas nao foi possivel salvar no perfil. Tente novamente.',
         retry: 'logo',
       })
       return
@@ -390,7 +403,7 @@ export default function ProfilePage() {
     setLogoUrl(publicUrl)
     setLastFailedLogoFile(null)
     setLogoUploading(false)
-    setMessage({ type: 'success', text: 'Logomarca atualizada!' })
+    setMessage({ type: 'success', text: 'Logomarca atualizada.' })
   }
 
   async function handleLogoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -424,9 +437,12 @@ export default function ProfilePage() {
       .eq('id', restaurant.id)
 
     if (updateError) {
-      console.error('[logo-remove] db update error:', updateError)
+      console.error('[logo-remove] db update error', {
+        code: updateError.code,
+        hint: updateError.message,
+      })
       setLogoUploading(false)
-      setMessage({ type: 'error', text: `Erro ao remover logomarca: ${updateError.message}` })
+      setMessage({ type: 'error', text: 'Nao foi possivel remover a logomarca. Tente novamente.' })
       return
     }
 
@@ -461,7 +477,11 @@ export default function ProfilePage() {
       .upload(fileName, toUpload, { contentType: 'image/jpeg' })
 
     if (uploadError) {
-      setMessage({ type: 'error', text: `Erro no upload: ${uploadError.message}` })
+      console.error('[photo-upload] storage error', {
+        name: uploadError.name,
+        hint: uploadError.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel enviar a foto. Tente novamente.' })
       setUploading(false)
       return
     }
@@ -475,7 +495,7 @@ export default function ProfilePage() {
     const publicUrl = `${urlData.publicUrl}?v=${Date.now()}`
     setPhotos([publicUrl])
     setUploading(false)
-    setMessage({ type: 'success', text: 'Foto principal atualizada! Clique em Salvar para confirmar.' })
+    setMessage({ type: 'success', text: 'Foto principal atualizada. Clique em Salvar para confirmar.' })
 
     // Reset input
     e.target.value = ''
@@ -514,7 +534,7 @@ export default function ProfilePage() {
       {/* Message */}
       {message && (
         <div
-          role="alert"
+          role={message.type === 'error' ? 'alert' : 'status'}
           className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm ${
             message.type === 'success'
               ? 'border border-green-200 bg-green-50 text-green-800'

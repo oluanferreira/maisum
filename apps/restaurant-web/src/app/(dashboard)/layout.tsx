@@ -2,12 +2,12 @@ import { Sidebar } from '@/components/sidebar'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar />
       <div className="flex flex-1 flex-col" style={{ backgroundColor: '#F9FAFB' }}>
         {/* Header */}
         <header
-          className="flex items-center px-8"
+          className="flex items-center px-4 md:px-8"
           style={{
             height: 64,
             backgroundColor: '#FFFFFF',
@@ -18,7 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
     </div>
   )
