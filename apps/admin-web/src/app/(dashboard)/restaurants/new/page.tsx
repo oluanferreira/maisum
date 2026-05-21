@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/../lib/supabase/client'
 
-import { fetchCoordinates } from '@/../lib/geocode'
+import { fetchCoordinates } from '@/lib/geocode'
 const restaurantSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   description: z.string(),
@@ -91,7 +91,8 @@ export default function NewRestaurantPage() {
       // 1. Insert restaurant
       let lat = data.latitude
       let lng = data.longitude
-      const geo = await fetchCoordinates(data.address)
+      const selectedCity = cities.find((city) => city.id === data.city_id)
+      const geo = await fetchCoordinates({ address: data.address, city: selectedCity?.name })
       if (geo) {
         lat = geo.lat
         lng = geo.lng

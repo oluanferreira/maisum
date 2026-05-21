@@ -137,7 +137,7 @@ export default function HomeScreen() {
           review_count: reviewCount,
           reviews: undefined,
         }
-      }) as Restaurant[]
+      }) as unknown as Restaurant[]
       setRestaurants(items)
 
       const cuisines = Array.from(

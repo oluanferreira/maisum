@@ -18,6 +18,8 @@
     "db:reset": "npx supabase db reset"
   },
   "devDependencies": {
+    "brace-expansion": "1.1.13",
+    "postcss": "8.5.15",
     "prettier": "^3.4.0",
     "turbo": "^2.3.0"
   },
@@ -25,5 +27,18 @@
   "dependencies": {
     "puppeteer": "^24.40.0",
     "styled-jsx": "^5.1.7"
+  },
+  "overrides": {
+    "brace-expansion": "1.1.13",
+    "postcss": "8.5.15",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.13"
+    },
+    "next": {
+      "postcss": "8.5.15"
+    },
+    "next@15.5.18": {
+      "postcss": "8.5.15"
+    }
   }
 }

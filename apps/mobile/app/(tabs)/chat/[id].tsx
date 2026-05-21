@@ -32,6 +32,10 @@ interface ConversationInfo {
   restaurants: { name: string } | null
 }
 
+type ConversationInfoRow = Omit<ConversationInfo, 'restaurants'> & {
+  restaurants: { name: string } | { name: string }[] | null
+}
+
 // --- Helpers ---
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr)
@@ -65,7 +69,9 @@ export default function ChatConversationScreen() {
         .single()
 
       if (data) {
-        setConversationInfo(data as ConversationInfo)
+        const row = data as ConversationInfoRow
+        const restaurant = Array.isArray(row.restaurants) ? row.restaurants[0] ?? null : row.restaurants
+        setConversationInfo({ ...row, restaurants: restaurant })
       }
     }
     loadInfo()

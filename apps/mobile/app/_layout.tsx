@@ -84,7 +84,7 @@ function AuthListener({ children }: { children: ReactNode }) {
       return () => {
         subscription.unsubscribe()
         if (notificationResponseListener.current) {
-          Notifications.removeNotificationSubscription(notificationResponseListener.current)
+          notificationResponseListener.current.remove()
         }
       }
     } catch (err) {
