@@ -69,7 +69,7 @@ const DEFAULT_AVAILABILITY: AvailabilityDayRule[] = WEEKDAYS.map((day) => ({
 }))
 
 function formatPrice(cents: number): string {
-  return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 function toTimeInput(value: string | null | undefined): string {
@@ -77,11 +77,33 @@ function toTimeInput(value: string | null | undefined): string {
 }
 
 function parsePriceToCents(value: string): number | null {
-  if (!value.trim()) return null
-  const cleaned = value.replace(/[R$\s]/g, '').replace(',', '.')
-  const num = parseFloat(cleaned)
-  if (Number.isNaN(num)) return null
-  return Math.round(num * 100)
+  const normalized = value.trim().replace(/\./g, '').replace(',', '.')
+  if (!normalized) return null
+
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+
+  const cents = Math.round(parsed * 100)
+  return cents <= 99999 ? cents : null
+}
+
+function maskPriceInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 5)
+  if (!digits) return ''
+
+  const padded = digits.padStart(3, '0')
+  const reais = padded.slice(0, -2).replace(/^0+(?=\d)/, '')
+  const centavos = padded.slice(-2)
+
+  return `${reais || '0'},${centavos}`
+}
+
+function priceTextFromCents(cents: number | null): string {
+  if (!cents || cents <= 0) return ''
+  return (cents / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 function rulesToDayRules(rules: BenefitRule[]): AvailabilityDayRule[] {
@@ -207,7 +229,7 @@ export default function BenefitsPage() {
     setFormName(benefit.name)
     setFormDescription(benefit.description || '')
     setFormCategory(benefit.category)
-    setFormOriginalPrice(benefit.original_price ? (benefit.original_price / 100).toFixed(2).replace('.', ',') : '')
+    setFormOriginalPrice(priceTextFromCents(benefit.original_price))
     if (benefit.promo_description === 'Leve 2, pague 1') {
       setFormPromoType('leve2pague1')
       setFormPromoCustom('')
@@ -262,7 +284,7 @@ export default function BenefitsPage() {
         code: deleteError.code,
         hint: deleteError.message,
       })
-      setMessage({ type: 'error', text: 'Nao foi possivel salvar as regras. Tente novamente.' })
+      setMessage({ type: 'error', text: 'Não foi possível salvar as regras. Tente novamente.' })
       setSavingAvailability(false)
       return
     }
@@ -284,7 +306,7 @@ export default function BenefitsPage() {
         code: insertError.code,
         hint: insertError.message,
       })
-      setMessage({ type: 'error', text: 'Nao foi possivel salvar as regras. Tente novamente.' })
+      setMessage({ type: 'error', text: 'Não foi possível salvar as regras. Tente novamente.' })
       setSavingAvailability(false)
       return
     }
@@ -304,7 +326,7 @@ export default function BenefitsPage() {
     if (!file) return
 
     if (file.size > 5 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'A imagem deve ter no maximo 5MB.' })
+      setMessage({ type: 'error', text: 'A imagem deve ter no máximo 5MB.' })
       return
     }
 
@@ -341,7 +363,7 @@ export default function BenefitsPage() {
     if (!restaurantId) return
 
     if (!formName.trim()) {
-      setMessage({ type: 'error', text: 'Nome do prato e obrigatorio' })
+      setMessage({ type: 'error', text: 'Nome do prato é obrigatório.' })
       return
     }
 
@@ -352,7 +374,7 @@ export default function BenefitsPage() {
     const promoDescription =
       formPromoType === 'leve2pague1'
         ? 'Leve 2, pague 1'
-        : formPromoCustom.trim() || 'Promocao personalizada'
+        : formPromoCustom.trim() || 'Promoção personalizada'
 
     const payload = {
       name: formName.trim(),
@@ -367,7 +389,7 @@ export default function BenefitsPage() {
       if (formPhotoFile) {
         const photoUrl = await uploadPhoto(editingId)
         if (!photoUrl) {
-          setMessage({ type: 'error', text: 'Nao foi possivel enviar a foto. Tente novamente.' })
+          setMessage({ type: 'error', text: 'Não foi possível enviar a foto. Tente novamente.' })
           setSaving(false)
           return
         }
@@ -380,7 +402,7 @@ export default function BenefitsPage() {
           code: error.code,
           hint: error.message,
         })
-        setMessage({ type: 'error', text: 'Nao foi possivel atualizar o prato. Tente novamente.' })
+        setMessage({ type: 'error', text: 'Não foi possível atualizar o prato. Tente novamente.' })
         setSaving(false)
         return
       }
@@ -398,7 +420,7 @@ export default function BenefitsPage() {
           code: error?.code,
           hint: error?.message,
         })
-        setMessage({ type: 'error', text: 'Nao foi possivel criar o prato. Tente novamente.' })
+        setMessage({ type: 'error', text: 'Não foi possível criar o prato. Tente novamente.' })
         setSaving(false)
         return
       }
@@ -408,7 +430,7 @@ export default function BenefitsPage() {
         if (photoUrl) {
           await supabase.from('benefits').update({ photo_url: photoUrl }).eq('id', newBenefit.id)
         } else {
-          setMessage({ type: 'error', text: 'Prato salvo, mas a foto nao foi enviada. Edite o prato para tentar de novo.' })
+          setMessage({ type: 'error', text: 'Prato salvo, mas a foto não foi enviada. Edite o prato para tentar de novo.' })
           resetForm()
           await loadData()
           setSaving(false)
@@ -431,7 +453,7 @@ export default function BenefitsPage() {
         code: error.code,
         hint: error.message,
       })
-      setMessage({ type: 'error', text: 'Nao foi possivel alterar o status do prato. Tente novamente.' })
+      setMessage({ type: 'error', text: 'Não foi possível alterar o status do prato. Tente novamente.' })
       return
     }
     setBenefits((prev) => prev.map((b) => (b.id === id ? { ...b, is_active: !currentActive } : b)))
@@ -450,7 +472,7 @@ export default function BenefitsPage() {
         code: error.code,
         hint: error.message,
       })
-      setMessage({ type: 'error', text: 'Nao foi possivel excluir o prato. Tente novamente.' })
+      setMessage({ type: 'error', text: 'Não foi possível excluir o prato. Tente novamente.' })
     } else {
       setBenefits((prev) => prev.filter((b) => b.id !== id))
       setMessage({ type: 'success', text: 'Prato removido.' })
@@ -479,7 +501,7 @@ export default function BenefitsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Pratos</h1>
-          <p className="text-neutral-600">Cadastre pratos e defina uma disponibilidade unica para todos os pratos ativos.</p>
+          <p className="text-neutral-600">Cadastre pratos e defina uma disponibilidade única para todos os pratos ativos.</p>
         </div>
         {!showForm && (
           <button
@@ -508,7 +530,7 @@ export default function BenefitsPage() {
         <div className="mb-4">
           <div>
             <h2 className="text-lg font-semibold text-neutral-900">Regras de disponibilidade</h2>
-            <p className="text-sm text-neutral-500">Esses dias, horarios e limites valem para todos os pratos ativos.</p>
+            <p className="text-sm text-neutral-500">Esses dias, horários e limites valem para todos os pratos ativos.</p>
           </div>
         </div>
 
@@ -541,7 +563,7 @@ export default function BenefitsPage() {
 
                 <div className="space-y-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-neutral-500">Inicio</label>
+                  <label className="mb-1 block text-xs font-medium text-neutral-500">Início</label>
                   <input
                     type="time"
                     value={rule.start}
@@ -561,7 +583,7 @@ export default function BenefitsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-neutral-500">Limite diario</label>
+                  <label className="mb-1 block text-xs font-medium text-neutral-500">Limite diário</label>
                   <input
                     type="number"
                     min={1}
@@ -573,7 +595,7 @@ export default function BenefitsPage() {
                   />
                 </div>
                   {!rule.enabled && (
-                    <p className="text-xs font-medium text-neutral-500">Indisponivel</p>
+                    <p className="text-xs font-medium text-neutral-500">Indisponível</p>
                   )}
               </div>
             </div>
@@ -585,7 +607,7 @@ export default function BenefitsPage() {
           <p className="text-xs text-neutral-500">
             Disponibilidade: {availabilityRules
               .filter((rule) => rule.enabled)
-              .map((rule) => `${getWeekdayLabel(rule.day)} ${rule.start}-${rule.end} Max ${rule.dailyLimit}/dia`)
+              .map((rule) => `${getWeekdayLabel(rule.day)} ${rule.start}-${rule.end} · máx. ${rule.dailyLimit}/dia`)
               .join(' | ') || 'Nenhuma disponibilidade configurada'}
           </p>
           <button
@@ -636,7 +658,7 @@ export default function BenefitsPage() {
                   </button>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                <p className="text-xs text-neutral-500">JPG, PNG ou WebP. Max 5MB.</p>
+                <p className="text-xs text-neutral-500">JPG, PNG ou WebP. Máximo 5MB.</p>
               </div>
             </div>
 
@@ -666,7 +688,7 @@ export default function BenefitsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">Descricao</label>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">Descrição</label>
               <textarea
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
@@ -678,12 +700,14 @@ export default function BenefitsPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Preco original</label>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Preço original</label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={formOriginalPrice}
-                  onChange={(e) => setFormOriginalPrice(e.target.value)}
-                  placeholder="Ex: 45,90"
+                  onChange={(e) => setFormOriginalPrice(maskPriceInput(e.target.value))}
+                  placeholder="Ex.: 45,90"
+                  maxLength={6}
                   className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
               </div>
@@ -750,7 +774,7 @@ export default function BenefitsPage() {
         <div className="rounded-lg border border-neutral-200 bg-white px-6 py-12 text-center shadow-sm">
           <p className="text-lg text-neutral-500">Nenhum prato cadastrado ainda</p>
           <p className="mt-1 text-sm text-neutral-400">
-            Clique em &quot;Novo prato&quot; para comecar a montar seu cardapio +um.
+            Clique em &quot;Novo prato&quot; para começar a montar seu cardápio +um.
           </p>
         </div>
       ) : (
