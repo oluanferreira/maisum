@@ -19,6 +19,8 @@ interface Restaurant {
   photos: string[]
   cep: string | null
   city_id: string | null
+  latitude: number | null
+  longitude: number | null
 }
 
 const LOGO_MAX_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
@@ -276,8 +278,8 @@ export default function ProfilePage() {
       setMessage({ type: 'error', text: 'CEP invalido ou nao encontrado. Verifique e tente novamente.' })
       return
     }
-    // success-inactive: NAO bloqueia save. Owner pode preencher tudo agora e
-    // ja fica pronto para quando a cidade for ativada (city_id permanece null).
+    // success-inactive: NAO bloqueia save. Preserve a cidade atual para evitar
+    // limpar city_id quando ViaCEP/geocode nao confirmar uma nova cidade ativa.
     if (!address.trim()) {
       setMessage({ type: 'error', text: 'Endereco e obrigatorio' })
       return
@@ -299,11 +301,19 @@ export default function ProfilePage() {
     const logradouro = addressParts[0]?.trim() || ''
     const numero = addressParts[1]?.trim() || ''
     
+    const existingCity = activeCities.find((city) => city.id === restaurant.city_id)
+    const cityForLocation =
+      cepLookup.status === 'success-active'
+        ? cepLookup.city
+        : existingCity
+    const resolvedCityId =
+      cepLookup.status === 'success-active' ? cepLookup.city.id : restaurant.city_id
+
     const coords = await getCoordinates({
       logradouro,
       numero,
-      cidade: cepLookup.status === 'success-active' ? cepLookup.city.name : '',
-      uf: cepLookup.status === 'success-active' ? cepLookup.city.state : '',
+      cidade: cityForLocation?.name || '',
+      uf: cityForLocation?.state || '',
     })
 
     const { error } = await supabase
@@ -318,9 +328,9 @@ export default function ProfilePage() {
         cuisine_type: null,
         photos,
         cep: cleanedCep,
-        city_id: cepLookup.status === 'success-active' ? cepLookup.city.id : null,
-        latitude: coords?.lat ?? null,
-        longitude: coords?.lng ?? null,
+        city_id: resolvedCityId,
+        latitude: coords?.lat ?? restaurant.latitude ?? null,
+        longitude: coords?.lng ?? restaurant.longitude ?? null,
         is_active: true, // Garante que o restaurante fique ativo ao salvar as alterações
       })
       .eq('id', restaurant.id)
@@ -332,6 +342,23 @@ export default function ProfilePage() {
       })
       setMessage({ type: 'error', text: 'Nao foi possivel salvar o perfil. Tente novamente.' })
     } else {
+      setRestaurant((current) =>
+        current
+          ? {
+              ...current,
+              name: name.trim(),
+              address: address.trim(),
+              phone: null,
+              whatsapp: normalizedWhatsapp,
+              instagram_url: instagramUrl.trim() || null,
+              photos,
+              cep: cleanedCep,
+              city_id: resolvedCityId,
+              latitude: coords?.lat ?? current.latitude,
+              longitude: coords?.lng ?? current.longitude,
+            }
+          : current,
+      )
       setMessage({ type: 'success', text: 'Perfil atualizado.' })
     }
 
