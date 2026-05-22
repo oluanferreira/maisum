@@ -50,7 +50,7 @@ export async function updateRestaurant(id: string, formData: any) {
       address: formData.address,
       city_id: formData.city_id,
       phone: formData.phone || null,
-      cuisine_type: formData.cuisine_type || null,
+      cuisine_type: null,
       latitude: coords?.lat ?? formData.latitude,
       longitude: coords?.lng ?? formData.longitude,
       is_active: true, // Garante que continue ativo

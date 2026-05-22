@@ -12,7 +12,6 @@ interface Restaurant {
   phone: string | null
   whatsapp: string | null
   instagram_url: string | null
-  cuisine_type: string | null
   logo_url: string | null
   photos: string[]
   cep: string | null
@@ -135,26 +134,11 @@ export default function ProfilePage() {
   const [address, setAddress] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [instagramUrl, setInstagramUrl] = useState('')
-  const [cuisineType, setCuisineType] = useState('')
   // MAISUM-RW-1.13: CEP + city resolution state
   const [cep, setCep] = useState('')
   const [cepLookup, setCepLookup] = useState<CepLookupState>({ status: 'idle' })
   const [activeCities, setActiveCities] = useState<ActiveCity[]>([])
   const [photos, setPhotos] = useState<string[]>([])
-
-  const CUISINE_CATEGORIES = [
-    { value: 'pizzaria', label: 'Pizzaria 🍕' },
-    { value: 'hamburgueria', label: 'Hamburgueria 🍔' },
-    { value: 'japonesa', label: 'Japonês 🍣' },
-    { value: 'italiana', label: 'Italiano 🍝' },
-    { value: 'brasileira', label: 'Brasileira 🥘' },
-    { value: 'bar', label: 'Bar 🍺' },
-    { value: 'cafeteria', label: 'Cafeteria ☕' },
-    { value: 'sorveteria', label: 'Açaí/Sorvete 🍨' },
-    { value: 'churrascaria', label: 'Churrascaria 🥩' },
-    { value: 'espetinho', label: 'Espetinho 🍢' },
-    { value: 'outros', label: 'Outros 🍽️' },
-  ]
 
   const supabase = createClient()
 
@@ -256,7 +240,6 @@ export default function ProfilePage() {
       setAddress(data.address || '')
       setWhatsapp(data.whatsapp || data.phone || '')
       setInstagramUrl(data.instagram_url || '')
-      setCuisineType(data.cuisine_type || '')
       setLogoUrl(data.logo_url || null)
       setPhotos(data.photos || [])
       // MAISUM-RW-1.13: load existing CEP + trigger lookup to display detected city
@@ -323,7 +306,7 @@ export default function ProfilePage() {
         phone: whatsapp.trim() || null,
         whatsapp: whatsapp.trim() || null,
         instagram_url: instagramUrl.trim() || null,
-        cuisine_type: cuisineType.trim() || null,
+        cuisine_type: null,
         photos,
         cep: cleanedCep,
         city_id: cepLookup.status === 'success-active' ? cepLookup.city.id : null,
@@ -629,26 +612,6 @@ export default function ProfilePage() {
                 onChange={(e) => setName(e.target.value)}
                 className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
               />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Tipo de Cozinha
-              </label>
-              <select
-                id="cuisine_type_select"
-                name="cuisine_type"
-                value={cuisineType}
-                onChange={(e) => setCuisineType(e.target.value)}
-                className="h-12 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 bg-white"
-              >
-                <option value="">Selecione uma categoria</option>
-                {CUISINE_CATEGORIES.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <div className="md:col-span-2">

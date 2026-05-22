@@ -16,7 +16,6 @@ const restaurantSchema = z.object({
   address: z.string().min(5, 'Endereço deve ter pelo menos 5 caracteres'),
   city_id: z.string().uuid('Selecione uma cidade'),
   phone: z.string(),
-  cuisine_type: z.string(),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
 })
@@ -82,7 +81,6 @@ export default function RestaurantEditPage() {
       address: data.address,
       city_id: data.city_id,
       phone: data.phone || '',
-      cuisine_type: data.cuisine_type || '',
       latitude: data.latitude,
       longitude: data.longitude,
     })
@@ -286,17 +284,6 @@ export default function RestaurantEditPage() {
             {...register('phone')}
             className="h-12 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
             placeholder="(77) 99999-9999"
-          />
-        </div>
-
-        {/* Cuisine Type */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Tipo de cozinha</label>
-          <input
-            type="text"
-            {...register('cuisine_type')}
-            className="h-12 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-            placeholder="Italiana, Japonesa, Brasileira..."
           />
         </div>
 

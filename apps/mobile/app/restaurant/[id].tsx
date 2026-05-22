@@ -46,7 +46,6 @@ interface Review {
 interface Restaurant {
   id: string
   name: string
-  cuisine_type: string | null
   description: string | null
   address: string | null
   phone: string | null
@@ -235,10 +234,7 @@ export default function RestaurantDetailScreen() {
           <Text style={styles.ratingLine}>
             ★ {avgRating > 0 ? avgRating : '--'} ({reviews.length} avaliacoes)
           </Text>
-          <Text style={styles.metaLine}>
-            {restaurant.cuisine_type ?? 'Variado'}
-            {cityName ? ` · ${cityName}` : ''}
-          </Text>
+          {cityName ? <Text style={styles.metaLine}>{cityName}</Text> : null}
           <View style={[styles.statusBadge, !anyAvailableNow && styles.statusBadgeGray]}>
             <View style={[styles.statusDot, !anyAvailableNow && styles.statusDotGray]} />
             <Text style={[styles.statusText, !anyAvailableNow && styles.statusTextGray]}>

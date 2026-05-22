@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { supabase } from '@/services/supabase'
 import { SearchBar } from '@/components/molecules/search-bar'
-import { FilterChips } from '@/components/molecules/filter-chips'
 import { useAuthStore } from '@/stores/auth'
 
 interface Restaurant {
@@ -23,36 +22,6 @@ interface Restaurant {
   avg_rating: number | null
   review_count: number | null
   [key: string]: unknown
-}
-
-// --- Cuisine category config ---
-const CUISINE_ICONS: Record<string, string> = {
-  'Brasileira': '🇧🇷',
-  'Italiana': '🍝',
-  'Japonesa': '🍣',
-  'Mexicana': '🌮',
-  'Pizza': '🍕',
-  'Pizzaria': '🍕',
-  'Hamburguer': '🍔',
-  'Hamburgueria': '🍔',
-  'Churrasco': '🥩',
-  'Churrascaria': '🥩',
-  'Açaí': '🍇',
-  'Padaria': '🥐',
-  'Cafeteria': '☕',
-  'Sorveteria': '🍦',
-  'Doces': '🍰',
-  'Saudável': '🥗',
-  'Fit': '🥗',
-  'Árabe': '🧆',
-  'Chinesa': '🥡',
-  'Frutos do Mar': '🦐',
-  'Lanche': '🌭',
-  'Pastelaria': '🥟',
-  'Marmita': '🍱',
-  'Self-service': '🍽️',
-  'Vegana': '🌱',
-  'Vegetariana': '🌱',
 }
 
 // --- Skeleton Card ---
@@ -88,9 +57,6 @@ function RestaurantCard({ restaurant, onPress }: { restaurant: Restaurant; onPre
           </View>
         )}
       </View>
-      {restaurant.cuisine_type && (
-        <Text style={styles.cardCuisine}>{restaurant.cuisine_type}</Text>
-      )}
       {restaurant.cities?.name && (
         <Text style={styles.cardCity}>{restaurant.cities.name}</Text>
       )}
@@ -107,8 +73,6 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [cuisineOptions, setCuisineOptions] = useState<string[]>([])
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([])
   const [selectedSort, setSelectedSort] = useState<string>(SORT_OPTIONS[0])
   const [userCity, setUserCity] = useState('Localizando...')
   
@@ -140,10 +104,6 @@ export default function HomeScreen() {
       }) as unknown as Restaurant[]
       setRestaurants(items)
 
-      const cuisines = Array.from(
-        new Set(items.map((r) => r.cuisine_type).filter(Boolean) as string[])
-      ).sort()
-      setCuisineOptions(cuisines)
     } catch (err) {
       console.error('Error fetching restaurants:', err)
     } finally {
@@ -181,17 +141,11 @@ export default function HomeScreen() {
     setRefreshing(false)
   }, [fetchRestaurants])
 
-  const handleToggleCuisine = useCallback((cuisine: string) => {
-    setSelectedCuisines((prev) =>
-      prev.includes(cuisine) ? prev.filter((c) => c !== cuisine) : [...prev, cuisine]
-    )
-  }, [])
-
   const handleToggleSort = useCallback((sort: string) => {
     setSelectedSort(sort)
   }, [])
 
-  // Filter restaurants by search + cuisine
+  // Filter restaurants by search.
   const filteredRestaurants = useMemo(() => {
     let result = restaurants
 
@@ -200,12 +154,8 @@ export default function HomeScreen() {
       result = result.filter((r) => r.name.toLowerCase().includes(q))
     }
 
-    if (selectedCuisines.length > 0) {
-      result = result.filter((r) => r.cuisine_type && selectedCuisines.includes(r.cuisine_type))
-    }
-
     return result
-  }, [restaurants, searchQuery, selectedCuisines])
+  }, [restaurants, searchQuery])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -229,57 +179,6 @@ export default function HomeScreen() {
           {loading ? 'Carregando...' : `${restaurants.length} restaurante${restaurants.length !== 1 ? 's' : ''} disponível${restaurants.length !== 1 ? 'is' : ''}`}
         </Text>
       </View>
-
-      {/* Cuisine Category Selector */}
-      {cuisineOptions.length > 0 && (
-        <View style={styles.categoriesContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContent}
-          >
-            <TouchableOpacity
-              style={[
-                styles.categoryChip,
-                selectedCuisines.length === 0 && styles.categoryChipActive,
-              ]}
-              onPress={() => setSelectedCuisines([])}
-            >
-              <Text style={styles.categoryIcon}>🍽️</Text>
-              <Text
-                style={[
-                  styles.categoryLabel,
-                  selectedCuisines.length === 0 && styles.categoryLabelActive,
-                ]}
-              >
-                Todos
-              </Text>
-            </TouchableOpacity>
-            {cuisineOptions.map((cuisine) => (
-              <TouchableOpacity
-                key={cuisine}
-                style={[
-                  styles.categoryChip,
-                  selectedCuisines.includes(cuisine) && styles.categoryChipActive,
-                ]}
-                onPress={() => handleToggleCuisine(cuisine)}
-              >
-                <Text style={styles.categoryIcon}>
-                  {CUISINE_ICONS[cuisine] ?? '🍴'}
-                </Text>
-                <Text
-                  style={[
-                    styles.categoryLabel,
-                    selectedCuisines.includes(cuisine) && styles.categoryLabelActive,
-                  ]}
-                >
-                  {cuisine}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
 
       {/* Restaurant List */}
       <ScrollView
@@ -392,43 +291,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     marginTop: 4,
   },
-  // Category Selector
-  categoriesContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  categoriesContent: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  categoryChip: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    minWidth: 72,
-  },
-  categoryChipActive: {
-    backgroundColor: '#FFF1EB',
-    borderWidth: 1.5,
-    borderColor: '#FF6B35',
-  },
-  categoryIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  categoryLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  categoryLabelActive: {
-    color: '#FF6B35',
-  },
   // List
   listContainer: {
     flex: 1,
@@ -510,11 +372,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#3B82F6',
-  },
-  cardCuisine: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
   },
   cardCity: {
     fontSize: 13,
