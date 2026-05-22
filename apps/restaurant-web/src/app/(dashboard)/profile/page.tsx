@@ -752,35 +752,51 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Photos · MAISUM-RW-1.15 AC-1: single hero photo 16:9 (era 5 slots aspect-square)
-            Schema preserved: photos text[] continua array · UI mostra/edita só photos[0].
-            Aspect ratio 16:9 via CSS · sem crop forçado (TD-MAISUM-RW-1.15-PHOTO-CROP LOW). */}
+        {/* Photos · MAISUM-RW-1.15 AC-1: single hero photo 16:9.
+            Preview compacto para nao dominar a pagina de perfil. */}
         <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold text-neutral-800">
-            Foto Principal
-          </h2>
-          <p className="mb-4 text-xs text-neutral-500">
-            Foto horizontal 16:9 que aparece na lista de restaurantes e no topo do seu perfil.
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-md">
+              <h2 className="mb-2 text-lg font-semibold text-neutral-800">
+                Foto Principal
+              </h2>
+              <p className="text-xs text-neutral-500">
+                Foto horizontal 16:9 que aparece no topo do seu perfil.
+              </p>
+            </div>
 
-          {/* Single hero photo preview · 16:9 aspect ratio · object-cover */}
-          {photos.length > 0 ? (
-            <div className="group relative aspect-[16/9] overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100">
-              <img
-                src={photos[0]}
-                alt="Foto principal do restaurante"
-                className="h-full w-full object-cover"
-              />
-              <button
-                type="button"
-                onClick={removePhoto}
-                aria-label="Remover foto"
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-sm font-medium text-white shadow-md transition-opacity hover:bg-red-700"
-              >
-                ✕
-              </button>
-              <label className="absolute bottom-2 left-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-orange-300 bg-white/95 px-3 py-1.5 text-xs font-medium text-orange-700 shadow-sm transition-colors hover:bg-orange-50">
-                {uploading ? 'Enviando...' : 'Substituir foto'}
+            {photos.length > 0 ? (
+              <div className="group relative aspect-[16/9] w-full max-w-[360px] overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 sm:w-[320px]">
+                <img
+                  src={photos[0]}
+                  alt="Foto principal do restaurante"
+                  className="h-full w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={removePhoto}
+                  aria-label="Remover foto"
+                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white shadow-md transition-colors hover:bg-red-700"
+                >
+                  ✕
+                </button>
+                <label className="absolute bottom-2 left-2 inline-flex cursor-pointer items-center gap-2 rounded-md border border-orange-300 bg-white/95 px-3 py-1.5 text-xs font-medium text-orange-700 shadow-sm transition-colors hover:bg-orange-50">
+                  {uploading ? 'Enviando...' : 'Substituir'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handlePhotoUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            ) : (
+              <label className="flex aspect-[16/9] w-full max-w-[360px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-4 py-2.5 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100 sm:w-[320px]">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {uploading ? 'Enviando...' : 'Carregar imagem'}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
@@ -789,22 +805,8 @@ export default function ProfilePage() {
                   className="hidden"
                 />
               </label>
-            </div>
-          ) : (
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2.5 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              {uploading ? 'Enviando...' : 'Carregar imagem'}
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handlePhotoUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Save Button */}
