@@ -12,9 +12,10 @@ interface ValidationResult {
   reason?: string
 }
 
-interface TodayValidation {
+interface UsageHistoryItem {
   id: string
   used_at: string
+  short_code: string | null
   profiles: { full_name: string | null } | null
 }
 
@@ -32,10 +33,10 @@ export default function ValidatePage() {
   const [manualCode, setManualCode] = useState('')
   const [validating, setValidating] = useState(false)
   const [result, setResult] = useState<ValidationResult | null>(null)
-  const [todayValidations, setTodayValidations] = useState<TodayValidation[]>([])
+  const [usageHistory, setUsageHistory] = useState<UsageHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Load restaurant ID for current admin and today's validations
+  // Load restaurant ID for current admin and recent usage history
   useEffect(() => {
     async function init() {
       try {
@@ -53,7 +54,7 @@ export default function ValidatePage() {
 
         if (restaurant) {
           setRestaurantId(restaurant.id)
-          await loadTodayValidations(restaurant.id)
+          await loadUsageHistory(restaurant.id)
         }
       } catch (err) {
         console.error('Error initializing:', err)
@@ -66,21 +67,18 @@ export default function ValidatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Load today's validations
-  const loadTodayValidations = useCallback(async (restId: string) => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
+  // Load usage history
+  const loadUsageHistory = useCallback(async (restId: string) => {
     const { data } = await supabase
       .from('coupons')
-      .select('id, used_at, profiles:user_id(full_name)')
+      .select('id, used_at, short_code, profiles:user_id(full_name)')
       .eq('restaurant_id', restId)
       .eq('status', 'used')
-      .gte('used_at', today.toISOString())
       .order('used_at', { ascending: false })
+      .limit(20)
 
     if (data) {
-      setTodayValidations(data as unknown as TodayValidation[])
+      setUsageHistory(data as unknown as UsageHistoryItem[])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -118,7 +116,7 @@ export default function ValidatePage() {
             couponId: data.coupon_id ?? couponCode,
             metadata: { inputMode: 'manual' },
           })
-          await loadTodayValidations(restaurantId)
+          await loadUsageHistory(restaurantId)
         }
       }
     } catch (err) {
@@ -130,12 +128,16 @@ export default function ValidatePage() {
       setTimeout(() => setResult(null), 8000)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manualCode, restaurantId, loadTodayValidations])
+  }, [manualCode, restaurantId, loadUsageHistory])
 
-  // Format time from ISO string
-  const formatTime = (isoStr: string): string => {
+  const formatDateTime = (isoStr: string): string => {
     const d = new Date(isoStr)
-    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
   if (loading) {
@@ -157,7 +159,7 @@ export default function ValidatePage() {
           </p>
         </div>
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-          Hoje: {todayValidations.length} validado(s)
+          Historico: {usageHistory.length} uso(s)
         </div>
       </div>
 
@@ -226,23 +228,28 @@ export default function ValidatePage() {
         </div>
       )}
 
-      {/* Today's validations */}
+      {/* Usage history */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-neutral-200">
         <h2 className="text-lg font-bold text-neutral-900 mb-4">
-          Validados Hoje ({todayValidations.length})
+          Historico de uso ({usageHistory.length})
         </h2>
-        {todayValidations.length === 0 ? (
-          <p className="text-neutral-400 text-sm">Nenhum cupom validado hoje</p>
+        {usageHistory.length === 0 ? (
+          <p className="text-neutral-400 text-sm">Nenhum cupom validado ainda</p>
         ) : (
           <ul className="space-y-3">
-            {todayValidations.map((v) => (
-              <li key={v.id} className="flex items-center gap-3 py-2 border-b border-neutral-100 last:border-0">
+            {usageHistory.map((v) => (
+              <li key={v.id} className="flex items-start gap-3 py-2 border-b border-neutral-100 last:border-0">
                 <span className="text-sm font-bold text-green-600" aria-hidden>OK</span>
-                <span className="flex-1 text-neutral-800 font-medium text-sm">
-                  {v.profiles?.full_name ?? 'Cliente'}
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold text-neutral-800">
+                    {v.profiles?.full_name ?? 'Cliente sem nome'}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-xs font-semibold tracking-[0.12em] text-neutral-500">
+                    {v.short_code ? `Codigo ${v.short_code}` : 'Codigo nao registrado'}
+                  </span>
                 </span>
-                <span className="text-neutral-400 text-sm">
-                  {v.used_at ? formatTime(v.used_at) : '--:--'}
+                <span className="text-right text-neutral-400 text-sm">
+                  {v.used_at ? formatDateTime(v.used_at) : '--:--'}
                 </span>
               </li>
             ))}
