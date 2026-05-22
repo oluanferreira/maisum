@@ -9,14 +9,20 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/../lib/supabase/client'
+import {
+  isValidBrazilWhatsapp,
+  maskBrazilWhatsapp,
+  normalizeBrazilWhatsapp,
+} from '@maisum/shared'
 
 import { fetchCoordinates } from '@/lib/geocode'
 const restaurantSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  description: z.string(),
   address: z.string().min(5, 'Endereço deve ter pelo menos 5 caracteres'),
   city_id: z.string().uuid('Selecione uma cidade'),
-  phone: z.string(),
+  whatsapp: z
+    .string()
+    .refine(isValidBrazilWhatsapp, 'WhatsApp deve ter DDD e 9 digitos validos.'),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
 })
@@ -40,12 +46,12 @@ export default function NewRestaurantPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<RestaurantFormData>({
     resolver: zodResolver(restaurantSchema),
     defaultValues: {
-      description: '',
-      phone: '',
+      whatsapp: '',
       latitude: 0,
       longitude: 0,
     },
@@ -99,10 +105,11 @@ export default function NewRestaurantPage() {
         .from('restaurants')
         .insert({
           name: data.name,
-          description: data.description || null,
+          description: null,
           address: data.address,
           city_id: data.city_id,
-          phone: data.phone || null,
+          phone: null,
+          whatsapp: normalizeBrazilWhatsapp(data.whatsapp),
           cuisine_type: null,
           latitude: lat,
           longitude: lng,
@@ -197,17 +204,6 @@ export default function NewRestaurantPage() {
           )}
         </div>
 
-        {/* Description */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Descrição</label>
-          <textarea
-            {...register('description')}
-            rows={3}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-            placeholder="Descrição do restaurante"
-          />
-        </div>
-
         {/* Address */}
         <div>
           <label className="mb-1 block text-sm font-medium text-neutral-700">Endereço *</label>
@@ -241,15 +237,31 @@ export default function NewRestaurantPage() {
           )}
         </div>
 
-        {/* Phone */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Telefone</label>
-          <input
-            type="text"
-            {...register('phone')}
-            className="h-12 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-            placeholder="(77) 99999-9999"
-          />
+          <label className="mb-1 block text-sm font-medium text-neutral-700">WhatsApp</label>
+          <div className="flex h-12 overflow-hidden rounded-lg border border-neutral-300 focus-within:border-orange-500 focus-within:ring-1 focus-within:ring-orange-500">
+            <span className="flex items-center border-r border-neutral-200 bg-neutral-50 px-3 text-sm font-medium text-neutral-700">
+              +55
+            </span>
+            <input
+              type="tel"
+              inputMode="numeric"
+              maxLength={15}
+              {...register('whatsapp', {
+                onChange: (event) => {
+                  setValue('whatsapp', maskBrazilWhatsapp(event.target.value), {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                },
+              })}
+              className="h-full w-full px-3 text-sm focus:outline-none"
+              placeholder="(77) 99999-9999"
+            />
+          </div>
+          {errors.whatsapp && (
+            <p className="mt-1 text-xs text-red-600">{errors.whatsapp.message}</p>
+          )}
         </div>
 
         {/* Coordinates */}

@@ -3,6 +3,7 @@
 import { createClient } from '@/../lib/supabase/server'
 import { fetchCoordinates } from '@/lib/geocode'
 import { revalidatePath } from 'next/cache'
+import { normalizeBrazilWhatsapp } from '@maisum/shared'
 
 export async function updateRestaurant(id: string, formData: any) {
   const supabase = await createClient()
@@ -46,10 +47,11 @@ export async function updateRestaurant(id: string, formData: any) {
     .from('restaurants')
     .update({
       name: formData.name,
-      description: formData.description || null,
+      description: null,
       address: formData.address,
       city_id: formData.city_id,
-      phone: formData.phone || null,
+      phone: null,
+      whatsapp: normalizeBrazilWhatsapp(formData.whatsapp),
       cuisine_type: null,
       latitude: coords?.lat ?? formData.latitude,
       longitude: coords?.lng ?? formData.longitude,

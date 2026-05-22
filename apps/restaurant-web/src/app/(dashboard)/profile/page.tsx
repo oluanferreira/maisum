@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/../lib/supabase/client'
 import { getCoordinates } from '@/../lib/geocoding'
+import {
+  maskBrazilWhatsapp,
+  normalizeBrazilWhatsapp,
+} from '@maisum/shared'
 
 interface Restaurant {
   id: string
   name: string
-  description: string | null
   address: string
   phone: string | null
   whatsapp: string | null
@@ -130,7 +133,6 @@ export default function ProfilePage() {
 
   // Form fields
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [instagramUrl, setInstagramUrl] = useState('')
@@ -236,9 +238,8 @@ export default function ProfilePage() {
     if (data) {
       setRestaurant(data)
       setName(data.name || '')
-      setDescription(data.description || '')
       setAddress(data.address || '')
-      setWhatsapp(data.whatsapp || data.phone || '')
+      setWhatsapp(maskBrazilWhatsapp(data.whatsapp || data.phone || ''))
       setInstagramUrl(data.instagram_url || '')
       setLogoUrl(data.logo_url || null)
       setPhotos(data.photos || [])
@@ -281,6 +282,14 @@ export default function ProfilePage() {
       setMessage({ type: 'error', text: 'Endereco e obrigatorio' })
       return
     }
+    let normalizedWhatsapp: string | null = null
+    try {
+      normalizedWhatsapp = normalizeBrazilWhatsapp(whatsapp)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'WhatsApp invalido.'
+      setMessage({ type: 'error', text: message })
+      return
+    }
 
     setSaving(true)
     setMessage(null)
@@ -301,10 +310,10 @@ export default function ProfilePage() {
       .from('restaurants')
       .update({
         name: name.trim(),
-        description: description.trim() || null,
+        description: null,
         address: address.trim(),
-        phone: whatsapp.trim() || null,
-        whatsapp: whatsapp.trim() || null,
+        phone: null,
+        whatsapp: normalizedWhatsapp,
         instagram_url: instagramUrl.trim() || null,
         cuisine_type: null,
         photos,
@@ -614,19 +623,6 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Descricao
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="Descreva seu restaurante para os clientes..."
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-            </div>
-
             {/* MAISUM-RW-1.13: CEP field BEFORE address — drives city detection */}
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -710,14 +706,21 @@ export default function ProfilePage() {
               <label className="mb-1 block text-sm font-medium text-neutral-700">
                 WhatsApp
               </label>
-              <input
-                type="text"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="(XX) XXXXX-XXXX"
-                className="h-10 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-              <p className="mt-1 text-xs text-neutral-400">Canal principal para contato com clientes</p>
+              <div className="flex h-10 overflow-hidden rounded-lg border border-neutral-300 focus-within:border-orange-500 focus-within:ring-1 focus-within:ring-orange-500">
+                <span className="flex items-center border-r border-neutral-200 bg-neutral-50 px-3 text-sm font-medium text-neutral-700">
+                  +55
+                </span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(maskBrazilWhatsapp(e.target.value))}
+                  placeholder="(77) 99999-9999"
+                  maxLength={15}
+                  className="h-full w-full px-3 text-sm focus:outline-none"
+                />
+              </div>
+              <p className="mt-1 text-xs text-neutral-400">Canal principal para contato com clientes. O +55 ja fica aplicado.</p>
             </div>
           </div>
         </div>

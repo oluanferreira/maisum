@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Linking,
   Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -46,9 +45,7 @@ interface Review {
 interface Restaurant {
   id: string
   name: string
-  description: string | null
   address: string | null
-  phone: string | null
   latitude: number | null
   longitude: number | null
   cities: { name: string } | null
@@ -320,16 +317,8 @@ export default function RestaurantDetailScreen() {
         {/* About Section */}
         <View style={styles.aboutSection}>
           <Text style={styles.sectionTitle}>Sobre</Text>
-          {restaurant.description && (
-            <Text style={styles.aboutText}>{restaurant.description}</Text>
-          )}
           {restaurant.address && (
             <Text style={styles.infoLine}>📍 {restaurant.address}</Text>
-          )}
-          {restaurant.phone && (
-            <TouchableOpacity onPress={() => Linking.openURL(`tel:${restaurant.phone}`)}>
-              <Text style={styles.phoneLine}>📞 {restaurant.phone}</Text>
-            </TouchableOpacity>
           )}
           <View style={styles.miniMapPlaceholder}>
             <Text style={styles.miniMapText}>Ver no mapa</Text>
@@ -466,9 +455,7 @@ const styles = StyleSheet.create({
 
   // About
   aboutSection: { padding: 16, backgroundColor: '#FFFFFF' },
-  aboutText: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 12 },
   infoLine: { fontSize: 14, color: '#374151', marginBottom: 8 },
-  phoneLine: { fontSize: 14, color: '#FF6B35', fontWeight: '500', marginBottom: 12 },
   miniMapPlaceholder: {
     height: 100, backgroundColor: '#E5E7EB', borderRadius: 12,
     justifyContent: 'center', alignItems: 'center', marginTop: 8,
