@@ -60,6 +60,14 @@ const WEEKDAYS = [
   { value: 6, label: 'Sab' },
 ]
 
+const REUSE_INTERVAL_OPTIONS = [
+  { value: 365, label: '365 dias' },
+  { value: 180, label: '180 dias' },
+  { value: 90, label: '90 dias' },
+  { value: 30, label: '30 dias' },
+  { value: 0, label: 'Sem intervalo' },
+]
+
 const DEFAULT_AVAILABILITY: AvailabilityDayRule[] = WEEKDAYS.map((day) => ({
   day: day.value,
   enabled: true,
@@ -147,6 +155,8 @@ export default function BenefitsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingAvailability, setSavingAvailability] = useState(false)
+  const [savingReuseInterval, setSavingReuseInterval] = useState(false)
+  const [reuseIntervalDays, setReuseIntervalDays] = useState(365)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const [showForm, setShowForm] = useState(false)
@@ -180,7 +190,7 @@ export default function BenefitsPage() {
 
     const { data: restaurant } = await supabase
       .from('restaurants')
-      .select('id')
+      .select('id, experience_reuse_interval_days')
       .eq('admin_user_id', user.id)
       .single()
 
@@ -190,6 +200,7 @@ export default function BenefitsPage() {
     }
 
     setRestaurantId(restaurant.id)
+    setReuseIntervalDays(restaurant.experience_reuse_interval_days ?? 365)
 
     const [benefitsRes, rulesRes] = await Promise.all([
       supabase
@@ -319,6 +330,36 @@ export default function BenefitsPage() {
     )
     setMessage({ type: 'success', text: 'Regras de disponibilidade atualizadas para todos os pratos.' })
     setSavingAvailability(false)
+  }
+
+  async function saveReuseInterval() {
+    if (!restaurantId) return
+
+    const allowedValue = REUSE_INTERVAL_OPTIONS.some((option) => option.value === reuseIntervalDays)
+      ? reuseIntervalDays
+      : 365
+
+    setSavingReuseInterval(true)
+    setMessage(null)
+
+    const { error } = await supabase
+      .from('restaurants')
+      .update({ experience_reuse_interval_days: allowedValue })
+      .eq('id', restaurantId)
+
+    if (error) {
+      console.error('[reuse-interval-save] update failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel salvar o prazo de retorno. Tente novamente.' })
+      setSavingReuseInterval(false)
+      return
+    }
+
+    setReuseIntervalDays(allowedValue)
+    setMessage({ type: 'success', text: 'Prazo de retorno atualizado.' })
+    setSavingReuseInterval(false)
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -532,6 +573,37 @@ export default function BenefitsPage() {
             <h2 className="text-lg font-semibold text-neutral-900">Regras de disponibilidade</h2>
             <p className="text-sm text-neutral-500">Esses dias, horários e limites valem para todos os pratos ativos.</p>
           </div>
+        </div>
+
+        <div className="mb-5 grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4 md:grid-cols-[1fr_auto] md:items-end">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700" htmlFor="reuse-interval-days">
+              Cliente pode voltar apos
+            </label>
+            <select
+              id="reuse-interval-days"
+              value={reuseIntervalDays}
+              onChange={(event) => setReuseIntervalDays(Number(event.target.value))}
+              className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 md:w-56"
+            >
+              {REUSE_INTERVAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-neutral-500">
+              Esse prazo vale depois que uma experiencia for validada neste estabelecimento.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={saveReuseInterval}
+            disabled={savingReuseInterval}
+            className="h-10 rounded-lg bg-neutral-900 px-5 text-sm font-medium text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {savingReuseInterval ? 'Salvando...' : 'Salvar retorno'}
+          </button>
         </div>
 
         <div className="overflow-x-auto pb-1">
