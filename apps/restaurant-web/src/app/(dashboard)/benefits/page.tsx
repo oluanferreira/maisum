@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/../lib/supabase/client'
+import { Plus } from '@phosphor-icons/react'
 
 type BenefitCategory = 'prato' | 'drink' | 'sobremesa' | 'combo'
 
@@ -43,13 +44,6 @@ const CATEGORIES: { value: BenefitCategory; label: string }[] = [
   { value: 'combo', label: 'Combo' },
 ]
 
-const CATEGORY_COLORS: Record<BenefitCategory, string> = {
-  prato: 'bg-blue-100 text-blue-700',
-  drink: 'bg-purple-100 text-purple-700',
-  sobremesa: 'bg-pink-100 text-pink-700',
-  combo: 'bg-orange-100 text-orange-700',
-}
-
 const WEEKDAYS = [
   { value: 0, label: 'Dom' },
   { value: 1, label: 'Seg' },
@@ -58,6 +52,14 @@ const WEEKDAYS = [
   { value: 4, label: 'Qui' },
   { value: 5, label: 'Sex' },
   { value: 6, label: 'Sab' },
+]
+
+const REUSE_INTERVAL_OPTIONS = [
+  { value: 365, label: '365 dias' },
+  { value: 180, label: '180 dias' },
+  { value: 90, label: '90 dias' },
+  { value: 30, label: '30 dias' },
+  { value: 0, label: 'Sem intervalo' },
 ]
 
 const DEFAULT_AVAILABILITY: AvailabilityDayRule[] = WEEKDAYS.map((day) => ({
@@ -144,12 +146,18 @@ export default function BenefitsPage() {
   const [benefits, setBenefits] = useState<Benefit[]>([])
   const [availabilityRules, setAvailabilityRules] = useState<AvailabilityDayRule[]>(DEFAULT_AVAILABILITY)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
+  const [restaurantName, setRestaurantName] = useState('')
+  const [reuseIntervalDays, setReuseIntervalDays] = useState(365)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingAvailability, setSavingAvailability] = useState(false)
+  const [savingReuseInterval, setSavingReuseInterval] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const [showForm, setShowForm] = useState(false)
+  const [showAvailabilityEditor, setShowAvailabilityEditor] = useState(false)
+  const [showReturnRulesModal, setShowReturnRulesModal] = useState(false)
+  const [selectedAvailabilityDay, setSelectedAvailabilityDay] = useState(1)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
@@ -159,7 +167,6 @@ export default function BenefitsPage() {
   const [formPromoCustom, setFormPromoCustom] = useState('')
   const [formPhotoFile, setFormPhotoFile] = useState<File | null>(null)
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -180,7 +187,7 @@ export default function BenefitsPage() {
 
     const { data: restaurant } = await supabase
       .from('restaurants')
-      .select('id')
+      .select('id, name, experience_reuse_interval_days')
       .eq('admin_user_id', user.id)
       .single()
 
@@ -190,6 +197,8 @@ export default function BenefitsPage() {
     }
 
     setRestaurantId(restaurant.id)
+    setRestaurantName(restaurant.name || '')
+    setReuseIntervalDays(restaurant.experience_reuse_interval_days ?? 365)
 
     const [benefitsRes, rulesRes] = await Promise.all([
       supabase
@@ -249,6 +258,23 @@ export default function BenefitsPage() {
   function updateAvailabilityRule(day: number, patch: Partial<AvailabilityDayRule>) {
     setAvailabilityRules((current) =>
       current.map((rule) => (rule.day === day ? { ...rule, ...patch } : rule)),
+    )
+  }
+
+  function applySelectedScheduleToEnabledDays() {
+    const selected = availabilityRules.find((rule) => rule.day === selectedAvailabilityDay)
+    if (!selected) return
+    setAvailabilityRules((current) =>
+      current.map((rule) =>
+        rule.enabled
+          ? {
+              ...rule,
+              start: selected.start,
+              end: selected.end,
+              dailyLimit: selected.dailyLimit,
+            }
+          : rule,
+      ),
     )
   }
 
@@ -319,6 +345,36 @@ export default function BenefitsPage() {
     )
     setMessage({ type: 'success', text: 'Regras de disponibilidade atualizadas para todos os pratos.' })
     setSavingAvailability(false)
+  }
+
+  async function saveReuseInterval() {
+    if (!restaurantId) return
+    if (!REUSE_INTERVAL_OPTIONS.some((option) => option.value === reuseIntervalDays)) {
+      setMessage({ type: 'error', text: 'Escolha um intervalo de retorno valido.' })
+      return
+    }
+
+    setSavingReuseInterval(true)
+    setMessage(null)
+
+    const { error } = await supabase
+      .from('restaurants')
+      .update({ experience_reuse_interval_days: reuseIntervalDays })
+      .eq('id', restaurantId)
+
+    if (error) {
+      console.error('[reuse-interval-save] update failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Nao foi possivel salvar o intervalo de retorno.' })
+      setSavingReuseInterval(false)
+      return
+    }
+
+    setMessage({ type: 'success', text: 'Intervalo de retorno atualizado.' })
+    setShowReturnRulesModal(false)
+    setSavingReuseInterval(false)
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -446,40 +502,6 @@ export default function BenefitsPage() {
     setSaving(false)
   }
 
-  async function toggleBenefit(id: string, currentActive: boolean) {
-    const { error } = await supabase.from('benefits').update({ is_active: !currentActive }).eq('id', id)
-    if (error) {
-      console.error('[benefit-toggle] update failed', {
-        code: error.code,
-        hint: error.message,
-      })
-      setMessage({ type: 'error', text: 'Não foi possível alterar o status do prato. Tente novamente.' })
-      return
-    }
-    setBenefits((prev) => prev.map((b) => (b.id === id ? { ...b, is_active: !currentActive } : b)))
-  }
-
-  async function deleteBenefit(id: string) {
-    const benefit = benefits.find((b) => b.id === id)
-    if (benefit?.photo_url) {
-      const match = benefit.photo_url.match(/restaurant-photos\/(.+)$/)
-      if (match) await supabase.storage.from('restaurant-photos').remove([match[1]])
-    }
-
-    const { error } = await supabase.from('benefits').delete().eq('id', id)
-    if (error) {
-      console.error('[benefit-delete] delete failed', {
-        code: error.code,
-        hint: error.message,
-      })
-      setMessage({ type: 'error', text: 'Não foi possível excluir o prato. Tente novamente.' })
-    } else {
-      setBenefits((prev) => prev.filter((b) => b.id !== id))
-      setMessage({ type: 'success', text: 'Prato removido.' })
-    }
-    setDeletingId(null)
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -496,24 +518,34 @@ export default function BenefitsPage() {
     )
   }
 
+  const enabledAvailabilityRules = availabilityRules.filter((rule) => rule.enabled)
+  const availabilityDays = enabledAvailabilityRules
+    .map((rule) => getWeekdayLabel(rule.day).toLowerCase())
+    .join(', ')
+  const usesSameAvailabilityWindow =
+    enabledAvailabilityRules.length > 0 &&
+    enabledAvailabilityRules.every(
+      (rule) =>
+        rule.start === enabledAvailabilityRules[0].start &&
+        rule.end === enabledAvailabilityRules[0].end,
+    )
+  const availabilitySummary =
+    enabledAvailabilityRules.length === 0
+      ? 'Nenhuma disponibilidade configurada'
+      : usesSameAvailabilityWindow
+        ? `${availabilityDays}, ${enabledAvailabilityRules[0].start}-${enabledAvailabilityRules[0].end}`
+        : enabledAvailabilityRules
+            .map((rule) => `${getWeekdayLabel(rule.day).toLowerCase()} ${rule.start}-${rule.end}`)
+            .join(' | ')
+  const selectedAvailabilityRule =
+    availabilityRules.find((rule) => rule.day === selectedAvailabilityDay) || availabilityRules[0]
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Pratos</h1>
-          <p className="text-neutral-600">Cadastre pratos e defina uma disponibilidade única para todos os pratos ativos.</p>
         </div>
-        {!showForm && (
-          <button
-            onClick={() => {
-              resetForm()
-              setShowForm(true)
-            }}
-            className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
-          >
-            Novo prato
-          </button>
-        )}
       </div>
 
       {message && (
@@ -526,99 +558,138 @@ export default function BenefitsPage() {
         </div>
       )}
 
-      <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="mb-4">
+      <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-neutral-900">Regras de disponibilidade</h2>
-            <p className="text-sm text-neutral-500">Esses dias, horários e limites valem para todos os pratos ativos.</p>
+            <h2 className="text-base font-semibold text-neutral-900">Disponibilidade dos pratos</h2>
+            <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{availabilitySummary}</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setShowReturnRulesModal(true)}
+              className="min-h-10 w-full rounded-lg border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
+            >
+              Regras de retorno
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAvailabilityEditor((current) => !current)}
+              className="min-h-10 w-full rounded-lg border border-orange-300 bg-orange-50 px-4 text-sm font-semibold text-orange-700 transition-colors hover:bg-orange-100"
+              aria-expanded={showAvailabilityEditor}
+            >
+              {showAvailabilityEditor ? 'Fechar disponibilidade' : 'Editar disponibilidade'}
+            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[860px] grid-cols-7 gap-3">
-            {availabilityRules.map((rule) => (
-              <div
-                key={rule.day}
-                className={`rounded-lg border p-3 ${
-                  rule.enabled
-                    ? 'border-orange-200 bg-orange-50/50'
-                    : 'border-neutral-200 bg-neutral-50'
-                }`}
-              >
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-neutral-800">{getWeekdayLabel(rule.day)}</span>
+        {showAvailabilityEditor && (
+          <>
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">Dias ativos</p>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {availabilityRules.map((rule) => {
+                    const selected = rule.day === selectedAvailabilityDay
+                    return (
+                      <button
+                        key={rule.day}
+                        type="button"
+                        onClick={() => setSelectedAvailabilityDay(rule.day)}
+                        aria-pressed={rule.enabled}
+                        className={`min-h-11 rounded-lg border text-xs font-bold transition-colors ${
+                          rule.enabled
+                            ? 'border-orange-300 bg-orange-50 text-orange-700'
+                            : 'border-neutral-200 bg-neutral-50 text-neutral-500'
+                        } ${selected ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                      >
+                        {getWeekdayLabel(rule.day)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {selectedAvailabilityRule && (
+                <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-neutral-500">Ajuste fino</p>
+                      <h3 className="text-base font-semibold text-neutral-900">
+                        {getWeekdayLabel(selectedAvailabilityRule.day)}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateAvailabilityRule(selectedAvailabilityRule.day, {
+                          enabled: !selectedAvailabilityRule.enabled,
+                        })
+                      }
+                      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
+                        selectedAvailabilityRule.enabled ? 'bg-orange-600' : 'bg-neutral-300'
+                      }`}
+                      aria-label={`${selectedAvailabilityRule.enabled ? 'Desativar' : 'Ativar'} ${getWeekdayLabel(selectedAvailabilityRule.day)}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                        selectedAvailabilityRule.enabled ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-neutral-500">Inicio</label>
+                      <input
+                        type="time"
+                        value={selectedAvailabilityRule.start}
+                        onChange={(e) =>
+                          updateAvailabilityRule(selectedAvailabilityRule.day, { start: e.target.value })
+                        }
+                        disabled={!selectedAvailabilityRule.enabled}
+                        className="h-11 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-neutral-500">Fim</label>
+                      <input
+                        type="time"
+                        value={selectedAvailabilityRule.end}
+                        onChange={(e) =>
+                          updateAvailabilityRule(selectedAvailabilityRule.day, { end: e.target.value })
+                        }
+                        disabled={!selectedAvailabilityRule.enabled}
+                        className="h-11 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => updateAvailabilityRule(rule.day, { enabled: !rule.enabled })}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                      rule.enabled ? 'bg-orange-600' : 'bg-neutral-300'
-                    }`}
-                    aria-label={`${rule.enabled ? 'Desativar' : 'Ativar'} ${getWeekdayLabel(rule.day)}`}
+                    onClick={applySelectedScheduleToEnabledDays}
+                    className="mt-3 min-h-10 w-full rounded-lg border border-orange-300 bg-orange-50 px-3 text-sm font-semibold text-orange-700 transition-colors hover:bg-orange-100"
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      rule.enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
+                    Aplicar este horario aos dias ativos
                   </button>
                 </div>
-
-                <div className="space-y-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-neutral-500">Início</label>
-                  <input
-                    type="time"
-                    value={rule.start}
-                    onChange={(e) => updateAvailabilityRule(rule.day, { start: e.target.value })}
-                    disabled={!rule.enabled}
-                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-neutral-500">Fim</label>
-                  <input
-                    type="time"
-                    value={rule.end}
-                    onChange={(e) => updateAvailabilityRule(rule.day, { end: e.target.value })}
-                    disabled={!rule.enabled}
-                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-neutral-500">Limite diário</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    value={rule.dailyLimit}
-                    onChange={(e) => updateAvailabilityRule(rule.day, { dailyLimit: Math.max(1, parseInt(e.target.value) || 1) })}
-                    disabled={!rule.enabled}
-                    className="h-9 w-full rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                </div>
-                  {!rule.enabled && (
-                    <p className="text-xs font-medium text-neutral-500">Indisponível</p>
-                  )}
-              </div>
+              )}
             </div>
-          ))}
-          </div>
-        </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-neutral-500">
-            Disponibilidade: {availabilityRules
-              .filter((rule) => rule.enabled)
-              .map((rule) => `${getWeekdayLabel(rule.day)} ${rule.start}-${rule.end} · máx. ${rule.dailyLimit}/dia`)
-              .join(' | ') || 'Nenhuma disponibilidade configurada'}
+            Disponibilidade: {availabilitySummary}
           </p>
           <button
             type="button"
             onClick={saveAvailability}
             disabled={savingAvailability}
-            className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+            className="min-h-11 w-full rounded-lg bg-orange-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
           >
-            {savingAvailability ? 'Salvando...' : 'Salvar regras'}
+            {savingAvailability ? 'Salvando...' : 'Salvar disponibilidade'}
           </button>
         </div>
+          </>
+        )}
       </section>
 
       {showForm && (
@@ -662,7 +733,7 @@ export default function BenefitsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Nome do prato *</label>
                 <input
@@ -698,7 +769,7 @@ export default function BenefitsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Preço original</label>
                 <input
@@ -771,108 +842,144 @@ export default function BenefitsPage() {
       )}
 
       {benefits.length === 0 ? (
-        <div className="rounded-lg border border-neutral-200 bg-white px-6 py-12 text-center shadow-sm">
-          <p className="text-lg text-neutral-500">Nenhum prato cadastrado ainda</p>
-          <p className="mt-1 text-sm text-neutral-400">
-            Clique em &quot;Novo prato&quot; para começar a montar seu cardápio +um.
-          </p>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-neutral-200 bg-white px-6 py-12 text-center shadow-sm">
+            <p className="text-lg text-neutral-500">Nenhum prato cadastrado ainda</p>
+          </div>
+          {!showForm && (
+            <button
+              type="button"
+              onClick={() => {
+                resetForm()
+                setShowForm(true)
+              }}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-300 bg-orange-50 px-4 text-sm font-bold text-orange-700 transition-colors hover:bg-orange-100"
+            >
+              <Plus size={18} weight="bold" aria-hidden="true" />
+              Novo prato
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {benefits.map((benefit) => (
-            <div
-              key={benefit.id}
-              className={`overflow-hidden rounded-lg border bg-white shadow-sm transition-opacity ${
-                benefit.is_active ? 'border-neutral-200' : 'border-neutral-100 opacity-60'
-              }`}
-            >
-              {benefit.photo_url ? (
-                <div className="h-40 w-full overflow-hidden bg-neutral-100">
-                  <img src={benefit.photo_url} alt={benefit.name} className="h-full w-full object-cover" />
-                </div>
-              ) : (
-                <div className="flex h-28 w-full items-center justify-center bg-neutral-100 text-sm text-neutral-400">
-                  Sem foto
-                </div>
-              )}
-
-              <div className="p-4">
-                <div className="mb-2 flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-neutral-900">{benefit.name}</h3>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-4">
+            {benefits.map((benefit) => (
+              <div
+                key={benefit.id}
+                className="rounded-2xl border border-[#2c2115] bg-[#100b06] p-4 shadow-sm"
+              >
+                <div className="flex gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="line-clamp-1 text-base font-bold text-white">
+                      {benefit.name}
+                    </h3>
                     {benefit.description && (
-                      <p className="mt-0.5 line-clamp-2 text-sm text-neutral-500">{benefit.description}</p>
+                      <p className="mt-1 line-clamp-2 text-sm leading-snug text-[#dfc89c]">
+                        {benefit.description}
+                      </p>
                     )}
+                    <p className="mt-2 text-xs font-semibold text-orange-600">
+                      {restaurantName || CATEGORIES.find((c) => c.value === benefit.category)?.label}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-white">
+                        {benefit.original_price ? formatPrice(benefit.original_price) : 'Consulte valor'}
+                      </span>
+                      {benefit.promo_description && (
+                        <span className="text-xs font-bold text-orange-500">
+                          {benefit.promo_description}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-2 line-clamp-1 text-xs text-[#8f8068]">
+                      {availabilitySummary}
+                    </p>
                   </div>
-                  <span className={`ml-2 inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[benefit.category]}`}>
-                    {CATEGORIES.find((c) => c.value === benefit.category)?.label}
-                  </span>
-                </div>
 
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  {benefit.original_price && (
-                    <span className="text-sm font-semibold text-orange-600">{formatPrice(benefit.original_price)}</span>
-                  )}
-                  {benefit.promo_description && (
-                    <span className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-                      {benefit.promo_description}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => toggleBenefit(benefit.id, benefit.is_active)}
-                    aria-label={`${benefit.is_active ? 'Desativar' : 'Ativar'} prato ${benefit.name}`}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      benefit.is_active ? 'bg-orange-600' : 'bg-neutral-300'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      benefit.is_active ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(benefit)}
-                      className="rounded px-2 py-1 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100"
-                    >
-                      Editar
-                    </button>
-                    {deletingId === benefit.id ? (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => deleteBenefit(benefit.id)}
-                          className="rounded px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingId(null)}
-                          className="rounded px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(benefit.id)}
-                        className="rounded px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
-                      >
-                        Excluir
-                      </button>
-                    )}
+                  <div className="w-28 shrink-0">
+                    <div className="aspect-square overflow-hidden rounded-xl bg-[#1b140d]">
+                      {benefit.photo_url ? (
+                        <img src={benefit.photo_url} alt={benefit.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs text-[#8f8068]">
+                          Sem foto
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => startEdit(benefit)}
+                  className="mt-3 min-h-10 w-full rounded-lg border border-orange-500/40 bg-orange-500/10 px-4 text-sm font-semibold text-orange-500 transition-colors hover:bg-orange-500/20"
+                >
+                  Editar
+                </button>
               </div>
+            ))}
+          </div>
+          {!showForm && (
+            <button
+              type="button"
+              onClick={() => {
+                resetForm()
+                setShowForm(true)
+              }}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-300 bg-orange-50 px-4 text-sm font-bold text-orange-700 transition-colors hover:bg-orange-100"
+            >
+              <Plus size={18} weight="bold" aria-hidden="true" />
+              Novo prato
+            </button>
+          )}
+        </div>
+      )}
+
+      {showReturnRulesModal && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/45 px-4 pb-4 pt-12 sm:items-center sm:justify-center">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-neutral-900">Regras de retorno</h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Defina quando o mesmo cliente pode usar uma nova experiencia neste estabelecimento.
+              </p>
             </div>
-          ))}
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-neutral-700">Cliente pode voltar apos</span>
+              <select
+                value={reuseIntervalDays}
+                onChange={(event) => setReuseIntervalDays(Number(event.target.value))}
+                className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                {REUSE_INTERVAL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setShowReturnRulesModal(false)}
+                className="min-h-11 rounded-lg border border-neutral-300 px-4 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveReuseInterval}
+                disabled={savingReuseInterval}
+                className="min-h-11 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingReuseInterval ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
