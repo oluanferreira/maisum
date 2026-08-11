@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/../lib/supabase/client'
 import { trackRestaurantEvent } from '@/lib/analytics'
 
-// --- Types ---
 interface ValidationResult {
   valid: boolean
   user_name?: string
@@ -22,10 +21,9 @@ interface UsageHistoryItem {
 const COUPON_CODE_PATTERN = /^[A-Z0-9]{6}$/
 
 function normalizeCouponCode(value: string): string {
-  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)
 }
 
-// --- Page ---
 export default function ValidatePage() {
   const supabase = createClient()
 
@@ -36,14 +34,27 @@ export default function ValidatePage() {
   const [usageHistory, setUsageHistory] = useState<UsageHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Load restaurant ID for current admin and recent usage history
+  const loadUsageHistory = useCallback(async (restId: string) => {
+    const { data } = await supabase
+      .from('coupons')
+      .select('id, used_at, short_code, profiles:user_id(full_name)')
+      .eq('restaurant_id', restId)
+      .eq('status', 'used')
+      .order('used_at', { ascending: false })
+      .limit(20)
+
+    if (data) {
+      setUsageHistory(data as unknown as UsageHistoryItem[])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     async function init() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // Get restaurant for this admin
         const { data: restaurant } = await supabase
           .from('restaurants')
           .select('id')
@@ -63,33 +74,17 @@ export default function ValidatePage() {
       }
     }
 
-    init()
+    void init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Load usage history
-  const loadUsageHistory = useCallback(async (restId: string) => {
-    const { data } = await supabase
-      .from('coupons')
-      .select('id, used_at, short_code, profiles:user_id(full_name)')
-      .eq('restaurant_id', restId)
-      .eq('status', 'used')
-      .order('used_at', { ascending: false })
-      .limit(20)
-
-    if (data) {
-      setUsageHistory(data as unknown as UsageHistoryItem[])
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Validate coupon
   const handleValidate = useCallback(async () => {
     const couponCode = normalizeCouponCode(manualCode)
+
     if (!couponCode || !restaurantId) return
 
     if (!COUPON_CODE_PATTERN.test(couponCode)) {
-      setResult({ valid: false, reason: 'Codigo deve ter 6 letras ou numeros' })
+      setResult({ valid: false, reason: 'O código deve ter 6 letras ou números.' })
       return
     }
 
@@ -104,35 +99,36 @@ export default function ValidatePage() {
 
       if (error) {
         console.error('Error validating coupon:', error)
-        setResult({ valid: false, reason: 'Nao foi possivel validar agora. Tente novamente.' })
+        setResult({ valid: false, reason: 'Não foi possível validar agora. Tente novamente.' })
       } else {
-        setResult(data as ValidationResult)
-        // Refresh today's list on success
-        if (data?.valid) {
+        const validation = data as ValidationResult
+        setResult(validation)
+
+        if (validation?.valid) {
           await trackRestaurantEvent(supabase, {
             eventName: 'experience_validated',
             pathname: '/validate',
             restaurantId,
-            couponId: data.coupon_id ?? couponCode,
+            couponId: validation.coupon_id ?? couponCode,
             metadata: { inputMode: 'manual' },
           })
           await loadUsageHistory(restaurantId)
+          setManualCode('')
         }
       }
     } catch (err) {
       console.error('Unexpected coupon validation failure:', err)
-      setResult({ valid: false, reason: 'Erro ao validar cupom' })
+      setResult({ valid: false, reason: 'Erro ao validar cupom.' })
     } finally {
       setValidating(false)
-      // Keep the result visible long enough for counter attendants to confirm it.
-      setTimeout(() => setResult(null), 8000)
+      window.setTimeout(() => setResult(null), 8000)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualCode, restaurantId, loadUsageHistory])
 
   const formatDateTime = (isoStr: string): string => {
-    const d = new Date(isoStr)
-    return d.toLocaleString('pt-BR', {
+    const date = new Date(isoStr)
+    return date.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       hour: '2-digit',
@@ -142,120 +138,130 @@ export default function ValidatePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+      <div className="flex min-h-[360px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#ff7657] border-t-transparent" />
       </div>
     )
   }
 
   return (
-    <div className="relative mx-auto max-w-4xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase text-orange-600">Operacao principal</p>
-          <h1 className="text-3xl font-bold text-neutral-900">Validar cupom</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Cole ou digite o codigo apresentado pelo cliente. O retorno aparece imediatamente.
-          </p>
-        </div>
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-          Historico: {usageHistory.length} uso(s)
-        </div>
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff7657]">
+          Operação do parceiro
+        </p>
+        <h1 className="mt-2 text-[30px] font-semibold leading-tight text-[#f4ede4]">
+          Validar cupom
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-[#a89b8c]">
+          Confira o código apresentado pelo cliente para liberar o benefício.
+        </p>
       </div>
 
-      {/* Manual input */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-neutral-200 mb-6">
-        <label htmlFor="coupon-code" className="block text-sm font-semibold text-neutral-700 mb-2">
-          Codigo do cupom
+      <section className="rounded-[26px] border border-[#332b20] bg-[#1b1710] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
+        <label htmlFor="coupon-code" className="mb-3 block text-sm font-semibold text-[#f4ede4]">
+          Código do cupom
         </label>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <input
-            id="coupon-code"
-            type="text"
-            value={manualCode}
-            onChange={(e) => setManualCode(normalizeCouponCode(e.target.value))}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void handleValidate()
-              }
-            }}
-            placeholder="Ex.: J7264G"
-            inputMode="text"
-            maxLength={32}
-            autoCapitalize="characters"
-            autoComplete="off"
-            className="h-14 flex-1 rounded-lg border border-neutral-300 px-4 text-base text-neutral-900 placeholder-neutral-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500"
-          />
-          <button
-            type="button"
-            onClick={handleValidate}
-            disabled={validating || !COUPON_CODE_PATTERN.test(normalizeCouponCode(manualCode)) || !restaurantId}
-            className="h-14 rounded-lg bg-orange-500 px-8 text-base font-semibold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[140px]"
-          >
-            {validating ? 'Validando...' : 'Validar'}
-          </button>
-        </div>
-      </div>
 
-      {/* Result overlay */}
+        <input
+          id="coupon-code"
+          type="text"
+          value={manualCode}
+          onChange={(event) => setManualCode(normalizeCouponCode(event.target.value))}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void handleValidate()
+            }
+          }}
+          placeholder="Ex.: J7264G"
+          inputMode="text"
+          maxLength={6}
+          autoCapitalize="characters"
+          autoComplete="off"
+          className="h-14 w-full rounded-full border border-[#3a3329] bg-[#28231d] px-5 text-center font-mono text-lg font-semibold tracking-[0.2em] text-[#f4ede4] outline-none placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-[#8e8274] focus:border-[#ff7657] focus:ring-2 focus:ring-[#ff7657]/20"
+        />
+
+        <button
+          type="button"
+          onClick={() => void handleValidate()}
+          disabled={validating || !COUPON_CODE_PATTERN.test(normalizeCouponCode(manualCode)) || !restaurantId}
+          className="mt-3 h-14 w-full rounded-full bg-[#a84f36] text-base font-semibold text-[#f8eee3] transition-colors hover:bg-[#bd5a3d] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {validating ? 'Validando...' : 'Validar'}
+        </button>
+
+        <p className="mt-4 text-center text-xs leading-5 text-[#8e8274]">
+          Digite os 6 caracteres do código exibido no cupom do cliente.
+        </p>
+      </section>
+
       {result && (
-        <div
+        <section
           role={result.valid ? 'status' : 'alert'}
           aria-live="polite"
-          className={`rounded-xl p-8 mb-6 text-center animate-fade-in ${
-          result.valid
-            ? 'bg-green-50 border-2 border-green-400'
-            : 'bg-red-50 border-2 border-red-400'
-          }`}
+          className={result.valid ? 'rounded-[26px] border border-[#3e7656] bg-[#17261d] p-5' : 'rounded-[26px] border border-[#8c3e3e] bg-[#2a1717] p-5'}
         >
-          <div className={`text-5xl font-bold mb-3 ${
-            result.valid ? 'text-green-500' : 'text-red-500'
-          }`}>
-            {result.valid ? 'OK' : '!'}
+          <div className="flex items-start gap-3">
+            <div
+              className={result.valid ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2d704b] text-lg font-bold text-[#d8f4df]' : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#873d3d] text-lg font-bold text-[#ffdede]'}
+              aria-hidden
+            >
+              {result.valid ? '✓' : '!'}
+            </div>
+            <div className="min-w-0">
+              <h2 className={result.valid ? 'text-base font-semibold text-[#c7f0d2]' : 'text-base font-semibold text-[#ffd0d0]'}>
+                {result.valid ? 'Cupom validado' : 'Cupom não validado'}
+              </h2>
+              {result.valid && result.user_name && (
+                <p className="mt-1 text-sm text-[#a9dcb5]">{result.user_name}</p>
+              )}
+              {!result.valid && result.reason && (
+                <p className="mt-1 text-sm leading-5 text-[#f1b6b6]">{result.reason}</p>
+              )}
+            </div>
           </div>
-          <h2 className={`text-xl font-bold mb-2 ${
-            result.valid ? 'text-green-700' : 'text-red-700'
-          }`}>
-            {result.valid ? 'Cupom validado' : 'Cupom invalido'}
-          </h2>
-          {result.valid && result.user_name && (
-            <p className="text-green-600 font-medium">{result.user_name}</p>
-          )}
-          {!result.valid && result.reason && (
-            <p className="text-red-600 text-sm mt-1">{result.reason}</p>
-          )}
-        </div>
+        </section>
       )}
 
-      {/* Usage history */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-neutral-200">
-        <h2 className="text-lg font-bold text-neutral-900 mb-4">
-          Historico de uso ({usageHistory.length})
-        </h2>
+      <section className="rounded-[26px] border border-[#332b20] bg-[#17130d] p-5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e8274]">
+              Operação
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-[#f4ede4]">Últimos resgates</h2>
+          </div>
+          <span className="rounded-full bg-[#2b2118] px-3 py-1 text-xs font-semibold text-[#e1b19f]">
+            {usageHistory.length}
+          </span>
+        </div>
+
         {usageHistory.length === 0 ? (
-          <p className="text-neutral-400 text-sm">Nenhum cupom validado ainda</p>
+          <p className="mt-5 text-sm text-[#8e8274]">Nenhum cupom validado ainda.</p>
         ) : (
-          <ul className="space-y-3">
-            {usageHistory.map((v) => (
-              <li key={v.id} className="flex items-start gap-3 py-2 border-b border-neutral-100 last:border-0">
-                <span className="text-sm font-bold text-green-600" aria-hidden>OK</span>
-                <span className="flex-1">
-                  <span className="block text-sm font-semibold text-neutral-800">
-                    {v.profiles?.full_name ?? 'Cliente sem nome'}
+          <ul className="mt-4 divide-y divide-[#2b241b]">
+            {usageHistory.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#203b2a] text-sm font-bold text-[#9bdbaf]" aria-hidden>
+                  ✓
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-[#e9ded1]">
+                    {item.profiles?.full_name ?? 'Cliente sem nome'}
                   </span>
-                  <span className="mt-0.5 block font-mono text-xs font-semibold tracking-[0.12em] text-neutral-500">
-                    {v.short_code ? `Codigo ${v.short_code}` : 'Codigo nao registrado'}
+                  <span className="mt-1 block font-mono text-[11px] font-semibold tracking-[0.12em] text-[#8e8274]">
+                    {item.short_code ? 'Código ' + item.short_code : 'Código não registrado'}
                   </span>
                 </span>
-                <span className="text-right text-neutral-400 text-sm">
-                  {v.used_at ? formatDateTime(v.used_at) : '--:--'}
+                <span className="shrink-0 text-right text-xs text-[#8e8274]">
+                  {item.used_at ? formatDateTime(item.used_at) : '--:--'}
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </section>
     </div>
   )
 }
