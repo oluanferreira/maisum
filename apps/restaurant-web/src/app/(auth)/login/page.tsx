@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { FormEvent, Suspense, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Suspense } from 'react'
 import { createClient } from '@/../lib/supabase/client'
 
 function LoginForm() {
@@ -12,8 +11,8 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setError('')
     setLoading(true)
 
@@ -38,40 +37,53 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-100">
-      <div className="w-full max-w-md rounded-xl bg-white p-10 shadow-lg">
-        <div className="mb-8 text-center">
-          <h1 className="font-bold" style={{ fontSize: 36, color: '#FF6B35' }}>
-            +um
-          </h1>
-          <p className="mt-1 text-sm text-neutral-500">Painel do Restaurante</p>
+    <main className="flex min-h-screen items-center justify-center bg-[#100d06] px-4 py-8 text-[#f4ede4]">
+      <section className="w-full max-w-[420px] rounded-[30px] border border-[#332b20] bg-[#1b1710] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-8">
+        <div className="mb-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#a89b8c]">
+            Painel parceiro
+          </p>
+          <h1 className="mt-2 font-serif text-4xl italic leading-none text-[#f4ede4]">+um Parceiro</h1>
+          <p className="mt-3 text-sm leading-6 text-[#a89b8c]">
+            Acesse sua operação para validar cupons e atualizar os itens da promoção.
+          </p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          <div role="alert" className="mb-5 rounded-2xl border border-[#8c3e3e] bg-[#2a1717] px-4 py-3 text-sm text-[#f1b6b6]">
+            {error}
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Email</label>
+            <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#e9ded1]">
+              Email
+            </label>
             <input
+              id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               required
-              className="h-12 w-full rounded-md border border-neutral-300 px-4 text-sm text-neutral-900 outline-none focus:border-[#FF6B35] focus:ring-1 focus:ring-[#FF6B35]"
-              placeholder="restaurante@maisum.com"
+              autoComplete="email"
+              className="h-14 w-full rounded-full border border-[#3a3329] bg-[#28231d] px-5 text-sm text-[#f4ede4] outline-none placeholder:text-[#8e8274] focus:border-[#ff7657] focus:ring-2 focus:ring-[#ff7657]/20"
+              placeholder="parceiro@maisum.com"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Senha</label>
+            <label htmlFor="password" className="mb-2 block text-sm font-medium text-[#e9ded1]">
+              Senha
+            </label>
             <input
+              id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               required
-              className="h-12 w-full rounded-md border border-neutral-300 px-4 text-sm text-neutral-900 outline-none focus:border-[#FF6B35] focus:ring-1 focus:ring-[#FF6B35]"
+              autoComplete="current-password"
+              className="h-14 w-full rounded-full border border-[#3a3329] bg-[#28231d] px-5 text-sm text-[#f4ede4] outline-none placeholder:text-[#8e8274] focus:border-[#ff7657] focus:ring-2 focus:ring-[#ff7657]/20"
               placeholder="••••••••"
             />
           </div>
@@ -79,14 +91,13 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 h-12 w-full rounded-md text-sm font-semibold text-white transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: '#FF6B35' }}
+            className="mt-2 h-14 w-full rounded-full bg-[#a84f36] text-sm font-semibold text-[#f8eee3] transition-colors hover:bg-[#bd5a3d] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }
 
