@@ -147,6 +147,7 @@ export default function BenefitsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingAvailability, setSavingAvailability] = useState(false)
+  const [creatingPartnerLink, setCreatingPartnerLink] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const [showForm, setShowForm] = useState(false)
@@ -161,6 +162,10 @@ export default function BenefitsPage() {
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const activeBenefitCount = benefits.filter((benefit) => benefit.is_active).length
+  const activeDayCount = availabilityRules.filter((rule) => rule.enabled).length
+  const partnerBenefitEligible = activeBenefitCount > 0 && activeDayCount >= 4
 
   useEffect(() => {
     void loadData()
@@ -319,6 +324,42 @@ export default function BenefitsPage() {
     )
     setMessage({ type: 'success', text: 'Regras de disponibilidade atualizadas para todos os pratos.' })
     setSavingAvailability(false)
+  }
+
+  async function activatePartnerBenefit() {
+    if (!restaurantId || !partnerBenefitEligible) return
+
+    setCreatingPartnerLink(true)
+    setMessage(null)
+
+    const { data, error } = await supabase.rpc('create_partner_user_benefit_link_token', {
+      p_restaurant_id: restaurantId,
+    })
+
+    if (error) {
+      console.error('[partner-benefit-link] create failed', {
+        code: error.code,
+        hint: error.message,
+      })
+      setMessage({ type: 'error', text: 'Não foi possível iniciar a ativação. Tente novamente.' })
+      setCreatingPartnerLink(false)
+      return
+    }
+
+    const result = data as { ok?: boolean; token?: string; error?: string }
+    if (!result?.ok || !result.token) {
+      const text = result?.error === 'not_eligible'
+        ? 'Mantenha um item ativo disponível em pelo menos 4 dias da semana para liberar a assinatura.'
+        : 'A assinatura ainda não pode ser ativada. Confira a disponibilidade e tente novamente.'
+      setMessage({ type: 'error', text })
+      setCreatingPartnerLink(false)
+      return
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.appmaisum.com.br'
+    const loginUrl = new URL('/login', appUrl)
+    loginUrl.searchParams.set('next', `/partner-token?benefit_token=${result.token}`)
+    window.location.assign(loginUrl.toString())
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -525,6 +566,43 @@ export default function BenefitsPage() {
           {message.text}
         </div>
       )}
+
+      <section className="rounded-[24px] border border-[#5d3324] bg-[#211711] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ff7657]">
+              Benefício parceiro
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-[#f4ede4]">Ative sua assinatura +um</h2>
+            <p className="mt-2 text-sm leading-6 text-[#b9a99a]">
+              Disponibilize um item em pelo menos 4 dias da semana para liberar o acesso da conta Google beneficiada.
+            </p>
+          </div>
+          <div className="shrink-0 rounded-2xl border border-[#5d3324] bg-[#2c1a12] px-3 py-2 text-center">
+            <p className="text-2xl font-semibold text-[#ff7657]">{activeDayCount}/7</p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#c9b8a7]">dias</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-[#3a2a20] bg-[#18120d] px-4 py-3 text-sm text-[#c9b8a7]">
+          {activeBenefitCount > 0
+            ? `${activeBenefitCount} ${activeBenefitCount === 1 ? 'item ativo' : 'itens ativos'} · ${activeDayCount} ${activeDayCount === 1 ? 'dia configurado' : 'dias configurados'}`
+            : 'Ative pelo menos um item para começar.'}
+        </div>
+
+        <button
+          type="button"
+          onClick={activatePartnerBenefit}
+          disabled={!partnerBenefitEligible || creatingPartnerLink}
+          className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-[#a84f36] px-4 text-sm font-semibold text-[#f8eee3] transition-colors hover:bg-[#bd5a3d] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {creatingPartnerLink ? 'Abrindo ativação...' : 'Ativar assinatura com Google'}
+        </button>
+
+        <p className="mt-3 text-center text-xs leading-5 text-[#958678]">
+          Você será levado ao app +um para entrar com a conta Google que receberá o benefício.
+        </p>
+      </section>
 
       <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
         <div className="mb-4">
