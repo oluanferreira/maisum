@@ -1,1 +1,117 @@
 @import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #100d06;
+}
+
+body {
+  margin: 0;
+  color: #f4ede4;
+}
+
+.restaurant-theme .bg-white {
+  background-color: #1b1710 !important;
+}
+
+.restaurant-theme .bg-neutral-50 {
+  background-color: #17130d !important;
+}
+
+.restaurant-theme .bg-neutral-100 {
+  background-color: #100d06 !important;
+}
+
+.restaurant-theme .bg-neutral-200 {
+  background-color: #28231d !important;
+}
+
+.restaurant-theme .text-neutral-900,
+.restaurant-theme .text-neutral-800,
+.restaurant-theme .text-neutral-700 {
+  color: #f4ede4 !important;
+}
+
+.restaurant-theme .text-neutral-600,
+.restaurant-theme .text-neutral-500,
+.restaurant-theme .text-neutral-400 {
+  color: #a89b8c !important;
+}
+
+.restaurant-theme .border-neutral-300,
+.restaurant-theme .border-neutral-200,
+.restaurant-theme .border-neutral-100 {
+  border-color: #3a3329 !important;
+}
+
+.restaurant-theme .bg-orange-50 {
+  background-color: #2c1a12 !important;
+}
+
+.restaurant-theme .text-orange-700,
+.restaurant-theme .text-orange-600 {
+  color: #ff7657 !important;
+}
+
+.restaurant-theme .border-orange-300,
+.restaurant-theme .border-orange-200 {
+  border-color: #80412f !important;
+}
+
+.restaurant-theme .bg-green-50 {
+  background-color: #17261d !important;
+}
+
+.restaurant-theme .text-green-800,
+.restaurant-theme .text-green-700,
+.restaurant-theme .text-green-600 {
+  color: #b4e5bf !important;
+}
+
+.restaurant-theme .border-green-200 {
+  border-color: #3e7656 !important;
+}
+
+.restaurant-theme .bg-red-50 {
+  background-color: #2a1717 !important;
+}
+
+.restaurant-theme .text-red-800,
+.restaurant-theme .text-red-700,
+.restaurant-theme .text-red-600 {
+  color: #f1b6b6 !important;
+}
+
+.restaurant-theme .border-red-200 {
+  border-color: #8c3e3e !important;
+}
+
+.restaurant-theme input,
+.restaurant-theme textarea,
+.restaurant-theme select {
+  border-color: #3a3329;
+  background-color: #28231d;
+  color: #f4ede4;
+}
+
+.restaurant-theme input::placeholder,
+.restaurant-theme textarea::placeholder {
+  color: #8e8274;
+}
+
+.restaurant-theme button:focus-visible,
+.restaurant-theme a:focus-visible {
+  outline: 2px solid #ff7657;
+  outline-offset: 2px;
+}
+
+@media (min-width: 481px) {
+  .restaurant-theme {
+    min-height: 100vh;
+  }
+}
