@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/../lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { fetchCoordinates } from '@/lib/geocode'
 import { revalidatePath } from 'next/cache'
 import { normalizeBrazilWhatsapp } from '@maisum/shared'

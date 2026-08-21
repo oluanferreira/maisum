@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/../lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 
 const BRAZILIAN_STATES = [
   'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
