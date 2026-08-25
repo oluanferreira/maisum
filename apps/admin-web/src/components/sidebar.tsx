@@ -16,8 +16,8 @@ import {
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: ChartBar },
-  { href: '/restaurants', label: 'Restaurantes', icon: ForkKnife },
-  { href: '/users', label: 'Usuarios', icon: Users },
+  { href: '/restaurants', label: 'Estabelecimentos', icon: ForkKnife },
+  { href: '/users', label: 'Usuários', icon: Users },
   { href: '/subscriptions', label: 'Assinaturas', icon: CreditCard },
   { href: '/notifications', label: 'Notificacoes', icon: Bell },
   { href: '/social-proofs', label: 'Social Proofs', icon: Camera },
