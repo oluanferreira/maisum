@@ -83,11 +83,11 @@ export default function UsersPage() {
     setLoading(false)
   }
 
-  async function openUser(profile: Profile) {
+  async function openUser(profile: Profile, preserveNotice = false) {
     setSelectedProfile(profile)
     setSubscriptions([])
     setCoupons([])
-    setNotice('')
+    if (!preserveNotice) setNotice('')
     setDetailLoading(true)
 
     const [subscriptionsResult, couponsResult] = await Promise.all([
@@ -143,7 +143,7 @@ export default function UsersPage() {
       setNotice(`Não foi possível ativar o anual: ${result.error.message}`)
     } else {
       setNotice('Plano anual ativado por 12 meses.')
-      await openUser(selectedProfile)
+      await openUser(selectedProfile, true)
     }
     setActionLoading(null)
   }
@@ -169,7 +169,7 @@ export default function UsersPage() {
       setNotice(`Não foi possível adicionar os cupons: ${error.message}`)
     } else {
       setNotice(`${quantity} cupom${quantity > 1 ? 's' : ''} avulso${quantity > 1 ? 's foram adicionados' : ' foi adicionado'}.`)
-      await openUser(selectedProfile)
+      await openUser(selectedProfile, true)
     }
     setActionLoading(null)
   }
@@ -198,7 +198,7 @@ export default function UsersPage() {
       setNotice(`Não foi possível remover os cupons: ${error.message}`)
     } else {
       setNotice(`${candidates.length} cupom${candidates.length > 1 ? 's avulsos foram removidos' : ' avulso foi removido'}.`)
-      await openUser(selectedProfile)
+      await openUser(selectedProfile, true)
     }
     setActionLoading(null)
   }
