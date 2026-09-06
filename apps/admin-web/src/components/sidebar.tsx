@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/../lib/supabase/client'
 import {
   ChartBar,
   ForkKnife,
@@ -16,8 +16,10 @@ import {
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: ChartBar },
-  { href: '/restaurants', label: 'Estabelecimentos', icon: ForkKnife },
-  { href: '/users', label: 'Usuários', icon: Users },
+  { href: '/crm', label: 'CRM Usuarios', icon: Users },
+  { href: '/crm/email', label: 'Email Marketing', icon: Bell },
+  { href: '/restaurants', label: 'Restaurantes', icon: ForkKnife },
+  { href: '/users', label: 'Usuarios', icon: Users },
   { href: '/subscriptions', label: 'Assinaturas', icon: CreditCard },
   { href: '/notifications', label: 'Notificacoes', icon: Bell },
   { href: '/social-proofs', label: 'Social Proofs', icon: Camera },
@@ -29,6 +31,7 @@ export function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
+    if (href === '/crm') return pathname === '/crm'
     return pathname.startsWith(href)
   }
 
@@ -38,14 +41,12 @@ export function Sidebar() {
       style={{ backgroundColor: '#1A1A2E', minWidth: 256, maxWidth: 256 }}
     >
       <div>
-        {/* Logo */}
         <div className="flex items-center px-5 py-6">
           <span className="text-2xl font-bold" style={{ color: '#FF6B35' }}>
             +um Admin
           </span>
         </div>
 
-        {/* Nav Links */}
         <nav className="mt-2 flex flex-col gap-1 px-3">
           {navItems.map((item) => {
             const active = isActive(item.href)
@@ -78,15 +79,8 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Bottom section */}
       <div className="flex flex-col gap-1 px-3 pb-4">
-        {/* Separator */}
-        <div
-          className="mx-2 mb-2"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}
-        />
-
-        {/* Sign Out */}
+        <div className="mx-2 mb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }} />
         <button
           onClick={async () => {
             const supabase = createClient()
