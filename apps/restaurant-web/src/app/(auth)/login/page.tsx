@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { FormEvent, Suspense, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/../lib/supabase/client'
@@ -96,6 +97,18 @@ function LoginForm() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+
+        <div className="mt-6 border-t border-[#332b20] pt-5 text-center">
+          <p className="mb-3 text-xs leading-5 text-[#8e8274]">
+            Quer colocar seu estabelecimento no +um?
+          </p>
+          <Link
+            href="/cadastro"
+            className="flex h-12 w-full items-center justify-center rounded-full border border-[#55493b] bg-transparent text-sm font-semibold text-[#f0dfcf] transition-colors hover:border-[#ff7657] hover:text-[#ff8a6d]"
+          >
+            Quero ser parceiro
+          </Link>
+        </div>
       </section>
     </main>
   )
