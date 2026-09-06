@@ -17,6 +17,7 @@ import {
 const navItems = [
   { href: '/', label: 'Dashboard', icon: ChartBar },
   { href: '/crm', label: 'CRM Usuarios', icon: Users },
+  { href: '/crm/email', label: 'Email Marketing', icon: Bell },
   { href: '/restaurants', label: 'Restaurantes', icon: ForkKnife },
   { href: '/users', label: 'Usuarios', icon: Users },
   { href: '/subscriptions', label: 'Assinaturas', icon: CreditCard },
@@ -30,6 +31,7 @@ export function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
+    if (href === '/crm') return pathname === '/crm'
     return pathname.startsWith(href)
   }
 
