@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createClient } from '@/../lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import {
   ChartBar,
   ForkKnife,
@@ -16,12 +16,12 @@ import {
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: ChartBar },
-  { href: '/crm', label: 'CRM Usuarios', icon: Users },
+  { href: '/crm', label: 'CRM Usuários', icon: Users },
   { href: '/crm/email', label: 'Email Marketing', icon: Bell },
-  { href: '/restaurants', label: 'Restaurantes', icon: ForkKnife },
-  { href: '/users', label: 'Usuarios', icon: Users },
+  { href: '/restaurants', label: 'Estabelecimentos', icon: ForkKnife },
+  { href: '/users', label: 'Usuários', icon: Users },
   { href: '/subscriptions', label: 'Assinaturas', icon: CreditCard },
-  { href: '/notifications', label: 'Notificacoes', icon: Bell },
+  { href: '/notifications', label: 'Notificações', icon: Bell },
   { href: '/social-proofs', label: 'Social Proofs', icon: Camera },
   { href: '/cities', label: 'Cidades', icon: Buildings },
 ]
