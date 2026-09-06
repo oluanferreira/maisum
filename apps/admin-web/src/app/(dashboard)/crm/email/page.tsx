@@ -18,6 +18,14 @@ type Campaign = {
   failed: number
 }
 
+type DispatchResult = {
+  ok?: boolean
+  claimed?: number
+  sent?: number
+  failed?: number
+  error?: string
+}
+
 const segments = [
   { value: 'all_opted_in', label: 'Todos com opt-in' },
   { value: 'registered', label: 'Cadastrados sem uso' },
@@ -48,6 +56,7 @@ export default function CrmEmailPage() {
     event.preventDefault()
     setSaving(true)
     setFeedback(null)
+
     const { data, error } = await supabase.rpc('crm_create_email_campaign', {
       p_name: form.name,
       p_subject: form.subject,
@@ -62,13 +71,49 @@ export default function CrmEmailPage() {
       setSaving(false)
       return
     }
-    const { data: queueData, error: queueError } = await supabase.rpc('crm_queue_email_campaign', { p_campaign_id: created.campaign_id })
+
+    const { data: queueData, error: queueError } = await supabase.rpc('crm_queue_email_campaign', {
+      p_campaign_id: created.campaign_id,
+    })
     const queued = queueData as { ok?: boolean; queued?: number } | null
-    if (queueError || !queued?.ok) setFeedback('Campanha criada, mas não foi possível montar a fila de envio.')
-    else {
-      setFeedback(`Campanha pronta: ${queued.queued ?? 0} destinatários com opt-in.`)
-      setForm({ name: '', subject: '', preview: '', segment: 'all_opted_in', content: '' })
+    if (queueError || !queued?.ok) {
+      setFeedback('Campanha criada, mas não foi possível montar a fila de envio.')
+      setSaving(false)
+      void loadCampaigns()
+      return
     }
+
+    const recipientCount = queued.queued ?? 0
+    if (recipientCount === 0) {
+      setFeedback('Campanha criada, mas este segmento ainda não tem usuários com opt-in de e-mail.')
+      setSaving(false)
+      setForm({ name: '', subject: '', preview: '', segment: 'all_opted_in', content: '' })
+      void loadCampaigns()
+      return
+    }
+
+    const { data: dispatchData, error: dispatchError } = await supabase.functions.invoke('dispatch-crm-emails', {
+      body: { campaignId: created.campaign_id },
+    })
+    const dispatch = dispatchData as DispatchResult | null
+
+    if (dispatchError || !dispatch?.ok) {
+      setFeedback(
+        dispatch?.error === 'resend_not_configured'
+          ? `Campanha com ${recipientCount} destinatários ficou na fila. Falta conectar a chave de envio do Resend no Supabase.`
+          : `Campanha com ${recipientCount} destinatários ficou na fila, mas o envio automático não respondeu.`,
+      )
+    } else {
+      const sent = dispatch.sent ?? 0
+      const failed = dispatch.failed ?? 0
+      setFeedback(
+        failed > 0
+          ? `${sent} e-mails enviados agora; ${failed} tiveram falha e ficaram registrados para tratamento.`
+          : `${sent} e-mails enviados pelo Resend.`,
+      )
+    }
+
+    setForm({ name: '', subject: '', preview: '', segment: 'all_opted_in', content: '' })
     setSaving(false)
     void loadCampaigns()
   }
@@ -94,7 +139,7 @@ export default function CrmEmailPage() {
             <Field label="Preheader"><input value={form.preview} onChange={(e) => setForm({ ...form, preview: e.target.value })} className="h-11 rounded-xl border border-neutral-300 px-3 outline-none focus:border-orange-500" placeholder="Linha curta ao lado do assunto" /></Field>
             <Field label="Mensagem"><textarea required rows={10} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} className="rounded-xl border border-neutral-300 p-3 leading-6 outline-none focus:border-orange-500" placeholder={'Oi!\n\nTem novidade no +UM...'} /></Field>
             {feedback ? <p className="rounded-xl bg-neutral-100 p-3 text-sm text-neutral-700">{feedback}</p> : null}
-            <button disabled={saving} className="h-12 rounded-xl bg-orange-600 px-5 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Preparando campanha...' : 'Criar e abastecer fila'}</button>
+            <button disabled={saving} className="h-12 rounded-xl bg-orange-600 px-5 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Preparando e enviando...' : 'Criar campanha e enviar'}</button>
           </form>
         </section>
 
@@ -113,7 +158,7 @@ export default function CrmEmailPage() {
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-neutral-950">Campanhas</h2>
-        <p className="text-sm text-neutral-500">Fila preparada para o dispatcher do Resend.</p>
+        <p className="text-sm text-neutral-500">Envios e falhas ficam registrados no CRM.</p>
         {loading ? <p className="py-10 text-center text-sm text-neutral-500">Carregando campanhas...</p> : campaigns.length === 0 ? <p className="py-10 text-center text-sm text-neutral-500">Nenhuma campanha criada ainda.</p> : (
           <div className="mt-4 grid gap-3">{campaigns.map((campaign) => (
             <div key={campaign.id} className="rounded-xl border border-neutral-200 p-4">
