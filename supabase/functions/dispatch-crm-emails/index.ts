@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const MAX_ATTEMPTS = 5
+const DEFAULT_FROM = '+UM <novidades@appmaisum.com.br>'
 
 type QueueItem = {
   id: string
@@ -30,19 +31,20 @@ function safeEqual(left: string, right: string) {
 serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
-  const dispatchSecret = Deno.env.get('CRM_EMAIL_DISPATCH_SECRET')
-  const providedSecret = req.headers.get('x-maisum-crm-secret') ?? ''
-  if (!dispatchSecret || !safeEqual(dispatchSecret, providedSecret)) {
-    return new Response('Unauthorized', { status: 401 })
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+  const adminKey = getAdminKey()
+  if (!supabaseUrl || !anonKey || !adminKey) {
+    return Response.json({ ok: false, error: 'supabase_not_configured' }, { status: 503 })
   }
 
-  const resendKey = Deno.env.get('RESEND_API_KEY')
-  const from = Deno.env.get('CRM_EMAIL_FROM') ?? Deno.env.get('OFFER_EMAIL_FROM')
-  const adminKey = getAdminKey()
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const authorized = await authorize(req, supabaseUrl, anonKey)
+  if (!authorized) return new Response('Unauthorized', { status: 401 })
 
-  if (!resendKey || !from || !adminKey || !supabaseUrl) {
-    return Response.json({ ok: false, error: 'not_configured' }, { status: 503 })
+  const resendKey = Deno.env.get('RESEND_API_KEY')
+  const from = Deno.env.get('CRM_EMAIL_FROM') ?? Deno.env.get('OFFER_EMAIL_FROM') ?? DEFAULT_FROM
+  if (!resendKey) {
+    return Response.json({ ok: false, error: 'resend_not_configured' }, { status: 503 })
   }
 
   const supabase = createClient(supabaseUrl, adminKey)
@@ -59,7 +61,10 @@ serve(async (req: Request) => {
 
   for (const item of items) {
     campaignIds.add(item.campaign_id)
-    await supabase.from('crm_email_campaigns').update({ status: 'sending', updated_at: new Date().toISOString() }).eq('id', item.campaign_id)
+    await supabase
+      .from('crm_email_campaigns')
+      .update({ status: 'sending', updated_at: new Date().toISOString() })
+      .eq('id', item.campaign_id)
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -88,12 +93,18 @@ serve(async (req: Request) => {
         provider_message_id: provider.id ?? null,
         last_error: null,
       }).eq('id', item.id)
-      await supabase.from('crm_contacts').update({ last_email_sent_at: now, updated_at: now }).eq('user_id', item.user_id)
+      await supabase.from('crm_contacts').update({
+        last_email_sent_at: now,
+        updated_at: now,
+      }).eq('user_id', item.user_id)
       await supabase.from('crm_contact_events').insert({
         user_id: item.user_id,
         channel: 'email',
         event_type: 'email_sent',
-        metadata: { campaign_id: item.campaign_id, provider_message_id: provider.id ?? null },
+        metadata: {
+          campaign_id: item.campaign_id,
+          provider_message_id: provider.id ?? null,
+        },
       })
       continue
     }
@@ -104,7 +115,9 @@ serve(async (req: Request) => {
     const retry = retryable && item.attempts < MAX_ATTEMPTS
     await supabase.from('crm_email_outbox').update({
       status: retry ? 'pending' : 'failed',
-      scheduled_at: retry ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : new Date().toISOString(),
+      scheduled_at: retry
+        ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
+        : new Date().toISOString(),
       last_error: `resend_${response?.status ?? 'network'}:${detail}`.slice(0, 500),
     }).eq('id', item.id)
   }
@@ -117,12 +130,33 @@ serve(async (req: Request) => {
       .in('status', ['pending', 'processing'])
 
     if ((remaining ?? 0) === 0) {
-      await supabase.from('crm_email_campaigns').update({ status: 'sent', updated_at: new Date().toISOString() }).eq('id', campaignId)
+      await supabase
+        .from('crm_email_campaigns')
+        .update({ status: 'sent', updated_at: new Date().toISOString() })
+        .eq('id', campaignId)
     }
   }
 
   return Response.json({ ok: true, claimed: items.length, sent, failed })
 })
+
+async function authorize(req: Request, supabaseUrl: string, anonKey: string) {
+  const configuredSecret = Deno.env.get('CRM_EMAIL_DISPATCH_SECRET')
+  const providedSecret = req.headers.get('x-maisum-crm-secret') ?? ''
+  if (configuredSecret && safeEqual(configuredSecret, providedSecret)) return true
+
+  const authorization = req.headers.get('Authorization')
+  if (!authorization) return false
+
+  const authClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authorization } },
+  })
+  const { data: { user }, error: userError } = await authClient.auth.getUser()
+  if (userError || !user) return false
+
+  const { data: role, error: roleError } = await authClient.rpc('get_user_role')
+  return !roleError && role === 'super_admin'
+}
 
 function withPreview(html: string, preview: string | null) {
   if (!preview) return html
