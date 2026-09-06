@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { createClient } from '@/../lib/supabase/client'
 
 type City = {
@@ -358,9 +358,9 @@ export default function PartnerSignupPage() {
 }
 
 const inputClass =
-  'h-13 min-h-[52px] w-full rounded-2xl border border-[#3a3329] bg-[#28231d] px-4 text-sm text-[#f4ede4] outline-none placeholder:text-[#786e63] focus:border-[#ff7657] focus:ring-2 focus:ring-[#ff7657]/20'
+  'min-h-[52px] w-full rounded-2xl border border-[#3a3329] bg-[#28231d] px-4 text-sm text-[#f4ede4] outline-none placeholder:text-[#786e63] focus:border-[#ff7657] focus:ring-2 focus:ring-[#ff7657]/20'
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
       <span className="mb-2 block text-sm font-medium text-[#e9ded1]">{label}</span>
