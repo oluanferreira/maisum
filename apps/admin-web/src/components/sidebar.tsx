@@ -18,6 +18,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: ChartBar },
   { href: '/crm', label: 'CRM Usuários', icon: Users },
   { href: '/crm/email', label: 'Email Marketing', icon: Bell },
+  { href: '/influencers', label: 'Influencers', icon: Users },
   { href: '/restaurants', label: 'Estabelecimentos', icon: ForkKnife },
   { href: '/users', label: 'Usuários', icon: Users },
   { href: '/subscriptions', label: 'Assinaturas', icon: CreditCard },
