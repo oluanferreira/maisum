@@ -13,9 +13,40 @@ type Channel = {
   account_active?: boolean | null
   link?: { campaign_key?: string | null; path?: string | null; is_active?: boolean | null; max_redemptions?: number | null } | null
   checkout_code?: { code: string; cakto_coupon_id?: string | null; discount_percent?: number | null; is_active?: boolean } | null
-  funnel?: { redemptions: number; first_uses: number; purchases: number }
-  money?: { gross_revenue_cents: number; pending_commission_cents: number; paid_commission_cents: number; reversed_commission_cents: number }
+  funnel?: {
+    redemptions: number
+    first_uses: number
+    purchases: number
+    direct_purchases?: number
+    experience_purchases?: number
+    unlinked_direct_sales?: number
+  }
+  money?: {
+    gross_revenue_cents: number
+    pending_commission_cents: number
+    paid_commission_cents: number
+    reversed_commission_cents: number
+    unlinked_direct_commission_cents?: number
+  }
   open_payout?: { id: string; amount_cents: number; status: string; requested_at: string } | null
+}
+
+type Sale = {
+  id: string
+  influencer_id: string
+  display_name: string
+  slug: string
+  provider_payment_id: string
+  buyer_email?: string | null
+  coupon_code?: string | null
+  source: 'sales_code' | 'acquisition_link' | string
+  gross_amount_cents: number
+  commission_bps: number
+  commission_amount_cents: number
+  payment_status: string
+  account_link_status: 'linked' | 'unlinked' | string
+  created_at: string
+  paid_at?: string | null
 }
 
 type Payout = {
@@ -55,6 +86,7 @@ const emptyForm: FormState = {
 export default function InfluencersPage() {
   const supabase = useMemo(() => createClient(), [])
   const [channels, setChannels] = useState<Channel[]>([])
+  const [sales, setSales] = useState<Sale[]>([])
   const [payouts, setPayouts] = useState<Payout[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
   const [loading, setLoading] = useState(true)
@@ -66,14 +98,16 @@ export default function InfluencersPage() {
 
   async function load() {
     setLoading(true)
-    const [channelResult, payoutResult] = await Promise.all([
+    const [channelResult, saleResult, payoutResult] = await Promise.all([
       supabase.rpc('admin_list_influencer_channels'),
+      supabase.rpc('admin_list_influencer_sales', { p_influencer_id: null, p_limit: 100 }),
       supabase.rpc('admin_list_influencer_payout_requests'),
     ])
-    if (channelResult.error || payoutResult.error) {
-      setError(channelResult.error?.message || payoutResult.error?.message || 'Não foi possível carregar os influencers.')
+    if (channelResult.error || saleResult.error || payoutResult.error) {
+      setError(channelResult.error?.message || saleResult.error?.message || payoutResult.error?.message || 'Não foi possível carregar os influencers.')
     } else {
       setChannels((channelResult.data ?? []) as Channel[])
+      setSales((saleResult.data ?? []) as Sale[])
       setPayouts((payoutResult.data ?? []) as Payout[])
     }
     setLoading(false)
@@ -182,17 +216,19 @@ export default function InfluencersPage() {
     acc.redemptions += channel.funnel?.redemptions ?? 0
     acc.uses += channel.funnel?.first_uses ?? 0
     acc.purchases += channel.funnel?.purchases ?? 0
+    acc.direct += channel.funnel?.direct_purchases ?? 0
+    acc.unlinked += channel.funnel?.unlinked_direct_sales ?? 0
     acc.revenue += channel.money?.gross_revenue_cents ?? 0
     acc.pending += channel.money?.pending_commission_cents ?? 0
     return acc
-  }, { redemptions: 0, uses: 0, purchases: 0, revenue: 0, pending: 0 })
+  }, { redemptions: 0, uses: 0, purchases: 0, direct: 0, unlinked: 0, revenue: 0, pending: 0 })
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">Influencers</h1>
-          <p className="text-neutral-600">Aquisição, atribuição, comissão e saques em um único fluxo.</p>
+          <p className="text-neutral-600">Aquisição, venda direta, atribuição, comissão e saques em um único fluxo.</p>
         </div>
         <button onClick={() => { setForm(emptyForm); setError(null); setMessage(null) }} className="rounded-lg bg-[#FF6B35] px-4 py-2 text-sm font-semibold text-white">
           Novo influencer
@@ -202,10 +238,12 @@ export default function InfluencersPage() {
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
       {message ? <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{message}</div> : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
         <Metric label="Resgates" value={String(totals.redemptions)} />
         <Metric label="Primeiros usos" value={String(totals.uses)} />
         <Metric label="Vendas" value={String(totals.purchases)} />
+        <Metric label="Diretas" value={String(totals.direct)} />
+        <Metric label="A vincular" value={String(totals.unlinked)} />
         <Metric label="Receita atribuída" value={money(totals.revenue)} />
         <Metric label="Comissão pendente" value={money(totals.pending)} />
       </div>
@@ -213,14 +251,14 @@ export default function InfluencersPage() {
       <section className="rounded-xl border border-neutral-200 bg-white p-5">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-neutral-900">{form.influencerId ? 'Editar canal' : 'Provisionar influencer'}</h2>
-          <p className="mt-1 text-sm text-neutral-500">O link fixa a atribuição no primeiro resgate. UTM é apenas analytics; o cupom do checkout funciona como fallback.</p>
+          <p className="mt-1 text-sm text-neutral-500">O link de experiência fixa a aquisição no primeiro resgate válido. O cupom da Cakto identifica venda direta quando não existe origem anterior; a primeira origem válida sempre vence.</p>
         </div>
         <form onSubmit={save} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Field label="Nome" value={form.displayName} onChange={(v) => setForm({ ...form, displayName: v })} required placeholder="Ex.: Léo Tavares" />
           <Field label="Slug do link" value={form.slug} onChange={(v) => setForm({ ...form, slug: slugify(v) })} required placeholder="leo-tavares" disabled={Boolean(form.influencerId)} />
           <Field label="Comissão (%)" value={form.commissionPercent} onChange={(v) => setForm({ ...form, commissionPercent: v })} required inputMode="decimal" placeholder="25" />
           <Field label="E-mail da conta +UM" value={form.accountEmail} onChange={(v) => setForm({ ...form, accountEmail: v })} type="email" placeholder="influencer@email.com" />
-          <Field label="Cupom Cakto" value={form.checkoutCode} onChange={(v) => setForm({ ...form, checkoutCode: v.toUpperCase().replace(/[^A-Z0-9-]/g, '') })} placeholder="LEO47" />
+          <Field label="Cupom Cakto" value={form.checkoutCode} onChange={(v) => setForm({ ...form, checkoutCode: v.toUpperCase().replace(/[^A-Z0-9-]/g, '') })} placeholder="Ex.: LEO20" />
           <Field label="Desconto Cakto (%)" value={form.discountPercent} onChange={(v) => setForm({ ...form, discountPercent: v })} inputMode="decimal" placeholder="Opcional" />
           <Field label="ID do cupom na Cakto" value={form.caktoCouponId} onChange={(v) => setForm({ ...form, caktoCouponId: v })} placeholder="Opcional" />
           <Field label="Campanha" value={form.campaignKey} onChange={(v) => setForm({ ...form, campaignKey: v })} placeholder="influencer-leo" />
@@ -229,7 +267,7 @@ export default function InfluencersPage() {
               {saving ? 'Salvando...' : form.influencerId ? 'Salvar alterações' : 'Criar canal + link'}
             </button>
             {form.influencerId ? <button type="button" onClick={() => setForm(emptyForm)} className="rounded-lg border border-neutral-200 px-5 py-2.5 text-sm font-semibold text-neutral-700">Cancelar</button> : null}
-            <p className="text-xs text-neutral-500">Não inventamos cupom/ID: deixe esses campos vazios até criar o cupom real na Cakto.</p>
+            <p className="text-xs text-neutral-500">Cadastre aqui somente o cupom real criado na Cakto. Não criamos códigos fictícios.</p>
           </div>
         </form>
       </section>
@@ -244,6 +282,8 @@ export default function InfluencersPage() {
         ) : channels.map((channel) => {
           const f = channel.funnel ?? { redemptions: 0, first_uses: 0, purchases: 0 }
           const m = channel.money ?? { gross_revenue_cents: 0, pending_commission_cents: 0, paid_commission_cents: 0, reversed_commission_cents: 0 }
+          const direct = f.direct_purchases ?? 0
+          const postExperience = f.experience_purchases ?? Math.max(0, f.purchases - direct)
           return (
             <div key={channel.id} className="rounded-xl border border-neutral-200 bg-white p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -252,10 +292,11 @@ export default function InfluencersPage() {
                     <h3 className="text-base font-semibold text-neutral-900">{channel.display_name}</h3>
                     <Badge tone={channel.is_active ? 'green' : 'neutral'}>{channel.is_active ? 'Ativo' : 'Pausado'}</Badge>
                     <Badge tone="orange">{formatPercent(channel.commission_bps / 100)} comissão</Badge>
+                    {(f.unlinked_direct_sales ?? 0) > 0 ? <Badge tone="orange">{f.unlinked_direct_sales} venda(s) a vincular</Badge> : null}
                   </div>
                   <p className="mt-2 break-all text-sm text-neutral-500">app.appmaisum.com.br{channel.link?.path ?? `/ativar/UM-${channel.slug.toUpperCase()}`}</p>
                   <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-neutral-500">
-                    <span>Cupom: <strong className="text-neutral-700">{channel.checkout_code?.code ?? 'não configurado'}</strong></span>
+                    <span>Cupom direto: <strong className="text-neutral-700">{channel.checkout_code?.code ?? 'não configurado'}</strong></span>
                     <span>Acesso: <strong className="text-neutral-700">{channel.account_email ?? 'não vinculado'}</strong></span>
                     <span>Campanha: <strong className="text-neutral-700">{channel.link?.campaign_key ?? '—'}</strong></span>
                   </div>
@@ -267,13 +308,15 @@ export default function InfluencersPage() {
                   </button>
                 </div>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-3 border-t border-neutral-100 pt-4 sm:grid-cols-3 xl:grid-cols-6">
+              <div className="mt-5 grid grid-cols-2 gap-3 border-t border-neutral-100 pt-4 sm:grid-cols-4 xl:grid-cols-8">
                 <Mini label="Resgates" value={String(f.redemptions)} />
                 <Mini label="Usos" value={String(f.first_uses)} />
+                <Mini label="Diretas" value={String(direct)} />
+                <Mini label="Pós-experiência" value={String(postExperience)} />
                 <Mini label="Vendas" value={String(f.purchases)} />
                 <Mini label="Uso / resgate" value={rate(f.first_uses, f.redemptions)} />
-                <Mini label="Venda / uso" value={rate(f.purchases, f.first_uses)} />
                 <Mini label="Receita" value={money(m.gross_revenue_cents)} />
+                <Mini label="Comissão pendente" value={money(m.pending_commission_cents)} />
               </div>
             </div>
           )
@@ -281,9 +324,57 @@ export default function InfluencersPage() {
       </section>
 
       <section className="space-y-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900">Vendas atribuídas</h2>
+            <p className="text-sm text-neutral-500">Cakto + link de primeira experiência no mesmo livro financeiro. Vendas diretas são detectadas pelo cupom mesmo antes de a compra ser vinculada a uma conta +UM.</p>
+          </div>
+          <span className="text-sm text-neutral-500">Últimas {sales.length} vendas</span>
+        </div>
+        {loading ? <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-neutral-500">Carregando vendas...</div> : sales.length === 0 ? (
+          <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-neutral-500">Nenhuma venda atribuída a influencer ainda.</div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-[980px] w-full text-left text-sm">
+                <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Influencer</th>
+                    <th className="px-4 py-3 font-semibold">Origem</th>
+                    <th className="px-4 py-3 font-semibold">Cupom</th>
+                    <th className="px-4 py-3 font-semibold">Comprador</th>
+                    <th className="px-4 py-3 font-semibold">Valor</th>
+                    <th className="px-4 py-3 font-semibold">Comissão</th>
+                    <th className="px-4 py-3 font-semibold">Vínculo</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Data</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {sales.map((sale) => (
+                    <tr key={sale.id} className="text-neutral-700">
+                      <td className="px-4 py-3 font-semibold text-neutral-900">{sale.display_name}</td>
+                      <td className="px-4 py-3"><Badge tone={sale.source === 'sales_code' ? 'orange' : 'green'}>{sale.source === 'sales_code' ? 'Venda direta' : 'Pós-experiência'}</Badge></td>
+                      <td className="px-4 py-3 font-mono text-xs">{sale.coupon_code ?? '—'}</td>
+                      <td className="px-4 py-3">{sale.buyer_email ?? '—'}</td>
+                      <td className="px-4 py-3 font-semibold text-neutral-900">{money(sale.gross_amount_cents)}</td>
+                      <td className="px-4 py-3">{money(sale.commission_amount_cents)} <span className="text-xs text-neutral-400">({formatPercent(sale.commission_bps / 100)})</span></td>
+                      <td className="px-4 py-3"><Badge tone={sale.account_link_status === 'linked' ? 'green' : 'orange'}>{sale.account_link_status === 'linked' ? 'Conta vinculada' : 'A vincular'}</Badge></td>
+                      <td className="px-4 py-3"><Badge tone={sale.payment_status === 'paid' ? 'green' : sale.payment_status === 'refunded' || sale.payment_status === 'chargeback' || sale.payment_status === 'reversed' ? 'red' : 'neutral'}>{salePaymentStatus(sale.payment_status)}</Badge></td>
+                      <td className="px-4 py-3 text-xs text-neutral-500">{new Date(sale.paid_at ?? sale.created_at).toLocaleString('pt-BR')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">Saques</h2>
-          <p className="text-sm text-neutral-500">Aprovação continua manual no MVP; ao marcar pago, as comissões vinculadas deixam de ficar pendentes.</p>
+          <p className="text-sm text-neutral-500">Aprovação continua manual no MVP. Comissão de venda direta detectada mas ainda não vinculada à conta entra no controle financeiro, porém só fica sacável após o vínculo formal.</p>
         </div>
         {payouts.length === 0 ? <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-neutral-500">Nenhuma solicitação de saque.</div> : payouts.map((payout) => (
           <div key={payout.id} className="rounded-xl border border-neutral-200 bg-white p-5">
@@ -324,4 +415,5 @@ function money(cents: number) { return new Intl.NumberFormat('pt-BR', { style: '
 function rate(value: number, base: number) { return base > 0 ? `${((value / base) * 100).toFixed(1).replace('.', ',')}%` : '0%' }
 function formatPercent(value: number) { return `${value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` }
 function payoutStatus(value: string) { return ({ requested: 'Solicitado', approved: 'Aprovado', paid: 'Pago', rejected: 'Rejeitado', cancelled: 'Cancelado' } as Record<string, string>)[value] ?? value }
+function salePaymentStatus(value: string) { return ({ paid: 'Pago', refunded: 'Reembolsado', chargeback: 'Chargeback', reversed: 'Estornado' } as Record<string, string>)[value] ?? value }
 function slugify(value: string) { return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) }
