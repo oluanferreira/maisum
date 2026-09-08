@@ -1,7 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config'
 
 export const createClient = () =>
   createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
   )
