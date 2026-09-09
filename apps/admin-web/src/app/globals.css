@@ -1,1 +1,119 @@
 @import 'tailwindcss';
+
+@theme {
+  --color-bg: #141008;
+  --color-bg-raised: #1e1810;
+  --color-bg-sunken: #2a2116;
+  --color-ink: #f5edde;
+  --color-ink-muted: #b8ab94;
+  --color-ink-subtle: #8e8268;
+  --color-coral: #ff7a59;
+  --color-coral-deep: #c8442b;
+  --color-gold: #f5d272;
+  --color-border: rgba(255,255,255,.08);
+  --color-border-strong: rgba(255,255,255,.14);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+}
+
+:root {
+  --admin-bg: #141008;
+  --admin-surface: #1e1810;
+  --admin-surface-raised: #261f15;
+  --admin-surface-soft: #2a2116;
+  --admin-ink: #f5edde;
+  --admin-muted: #b8ab94;
+  --admin-subtle: #8e8268;
+  --admin-coral: #ff7a59;
+  --admin-coral-soft: rgba(255,122,89,.12);
+  --admin-border: rgba(255,255,255,.08);
+  --admin-border-strong: rgba(255,255,255,.14);
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -.015em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--admin-coral);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(255,122,89,.14);
+}
+
+.admin-shell {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 12% -8%, rgba(255,122,89,.08), transparent 28rem),
+    var(--admin-bg);
+  color: var(--admin-ink);
+}
+
+.admin-shell .bg-white { background-color: var(--admin-surface) !important; }
+.admin-shell .bg-neutral-50 { background-color: var(--admin-surface-raised) !important; }
+.admin-shell .bg-neutral-50\/60 { background-color: rgba(38,31,21,.72) !important; }
+.admin-shell .bg-neutral-100 { background-color: var(--admin-surface-soft) !important; }
+.admin-shell .bg-neutral-950 { background-color: #0f0c07 !important; }
+
+.admin-shell .text-neutral-950,
+.admin-shell .text-neutral-900,
+.admin-shell .text-neutral-800 { color: var(--admin-ink) !important; }
+.admin-shell .text-neutral-700,
+.admin-shell .text-neutral-600 { color: var(--admin-muted) !important; }
+.admin-shell .text-neutral-500,
+.admin-shell .text-neutral-400,
+.admin-shell .text-neutral-300 { color: var(--admin-subtle) !important; }
+
+.admin-shell .border-neutral-100,
+.admin-shell .border-neutral-200,
+.admin-shell .border-neutral-300 { border-color: var(--admin-border) !important; }
+.admin-shell .ring-neutral-200 { --tw-ring-color: var(--admin-border) !important; }
+
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea {
+  background: var(--admin-surface-raised);
+  border-color: var(--admin-border-strong) !important;
+  color: var(--admin-ink) !important;
+  color-scheme: dark;
+}
+
+.admin-shell input::placeholder,
+.admin-shell textarea::placeholder { color: var(--admin-subtle); }
+
+.admin-shell .shadow-sm,
+.admin-shell .shadow { box-shadow: 0 16px 44px rgba(0,0,0,.16) !important; }
+
+.admin-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.admin-scroll::-webkit-scrollbar { display: none; }
+
+.admin-safe-bottom { padding-bottom: calc(5.75rem + env(safe-area-inset-bottom)); }
+.admin-bottom-nav { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
+
+@media (min-width: 1024px) {
+  .admin-safe-bottom { padding-bottom: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
