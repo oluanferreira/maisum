@@ -1,182 +1,322 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-type Campaign = {
+type Variant = {
   id: string
+  variant_key: string
+  subject: string
+  preheader: string | null
+  headline: string | null
+  body_text: string
+  cta_label: string
+  cta_path: string
+  weight: number
+  is_active: boolean
+}
+
+type Step = {
+  id: string
+  step_key: string
+  position: number
   name: string
+  description: string | null
+  trigger_stage: string | null
+  channel: 'email' | 'whatsapp' | 'system'
+  status: 'draft' | 'active' | 'paused' | 'archived'
+  delay_minutes: number
+  experiment_key: string | null
+  metrics: Record<string, number>
+  variants: Variant[]
+}
+
+type Funnel = {
+  id: string
+  funnel_key: string
+  category: string
+  name: string
+  description: string | null
+  status: 'draft' | 'active' | 'paused' | 'archived'
+  metrics: Record<string, number>
+  steps: Step[]
+}
+
+type ExperimentMetric = {
+  variant_key: string
   subject: string
   preview_text: string | null
-  segment: string
   status: string
-  scheduled_at: string | null
-  created_at: string
-  recipients: number
+  assigned: number
+  queued: number
   sent: number
   failed: number
+  opens: number
+  clicks: number
+  activations: number
+  first_uses: number
 }
 
-type DispatchResult = {
-  ok?: boolean
-  claimed?: number
-  sent?: number
-  failed?: number
-  error?: string
+type VariantDraft = {
+  subject: string
+  preheader: string
+  headline: string
+  body_text: string
+  cta_label: string
+  cta_path: string
+  is_active: boolean
 }
-
-const segments = [
-  { value: 'all_opted_in', label: 'Todos com opt-in' },
-  { value: 'registered', label: 'Cadastrados sem uso' },
-  { value: 'coupon_ready', label: 'Cupom disponível' },
-  { value: 'offer_active', label: 'Oferta R$47 ativa' },
-  { value: 'offer_expired', label: 'Oferta expirada' },
-  { value: 'customer', label: 'Assinantes' },
-]
 
 export default function CrmEmailPage() {
   const supabase = useMemo(() => createClient(), [])
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [funnels, setFunnels] = useState<Funnel[]>([])
+  const [experimentMetrics, setExperimentMetrics] = useState<Record<string, ExperimentMetric[]>>({})
+  const [activeCategory, setActiveCategory] = useState('')
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null)
+  const [variantDraft, setVariantDraft] = useState<VariantDraft | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', subject: '', preview: '', segment: 'all_opted_in', content: '' })
 
-  useEffect(() => { void loadCampaigns() }, [])
+  useEffect(() => { void load() }, [])
 
-  async function loadCampaigns() {
+  async function load() {
     setLoading(true)
-    const { data, error } = await supabase.rpc('get_crm_email_campaigns', { p_limit: 50 })
-    if (!error) setCampaigns((data ?? []) as Campaign[])
+    setFeedback(null)
+    const { data, error } = await supabase.rpc('get_crm_marketing_funnels_dashboard')
+    if (error) {
+      console.error(error)
+      setFeedback('Não foi possível carregar os funis agora.')
+      setLoading(false)
+      return
+    }
+    const rows = (data ?? []) as Funnel[]
+    setFunnels(rows)
+    if (!activeCategory && rows[0]?.category) setActiveCategory(rows[0].category)
+
+    const keys = Array.from(new Set(rows.flatMap((f) => f.steps.map((s) => s.experiment_key).filter(Boolean)))) as string[]
+    const metricsEntries = await Promise.all(keys.map(async (key) => {
+      const { data: metricData } = await supabase.rpc('get_crm_email_experiment_metrics', { p_experiment_key: key })
+      return [key, (metricData ?? []) as ExperimentMetric[]] as const
+    }))
+    setExperimentMetrics(Object.fromEntries(metricsEntries))
     setLoading(false)
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    setSaving(true)
+  const categories = useMemo(() => Array.from(new Set(funnels.map((f) => f.category))), [funnels])
+  const visibleFunnels = useMemo(() => funnels.filter((f) => !activeCategory || f.category === activeCategory), [funnels, activeCategory])
+
+  function beginVariantEdit(variant: Variant) {
+    setEditingVariantId(variant.id)
+    setVariantDraft({
+      subject: variant.subject,
+      preheader: variant.preheader ?? '',
+      headline: variant.headline ?? '',
+      body_text: variant.body_text,
+      cta_label: variant.cta_label,
+      cta_path: variant.cta_path,
+      is_active: variant.is_active,
+    })
     setFeedback(null)
+  }
 
-    const { data, error } = await supabase.rpc('crm_create_email_campaign', {
-      p_name: form.name,
-      p_subject: form.subject,
-      p_preview_text: form.preview || null,
-      p_html_body: emailHtml(form.content),
-      p_segment: form.segment,
-      p_scheduled_at: null,
+  async function saveVariant(variantId: string) {
+    if (!variantDraft) return
+    setBusyId(variantId)
+    const { data, error } = await supabase.rpc('admin_update_crm_marketing_email_variant', {
+      p_variant_id: variantId,
+      p_subject: variantDraft.subject,
+      p_preheader: variantDraft.preheader || null,
+      p_headline: variantDraft.headline || null,
+      p_body_text: variantDraft.body_text,
+      p_cta_label: variantDraft.cta_label,
+      p_cta_path: variantDraft.cta_path,
+      p_is_active: variantDraft.is_active,
     })
-    const created = data as { ok?: boolean; campaign_id?: string } | null
-    if (error || !created?.ok || !created.campaign_id) {
-      setFeedback('Não foi possível criar a campanha.')
-      setSaving(false)
-      return
+    const result = data as { ok?: boolean } | null
+    if (error || !result?.ok) setFeedback('Não foi possível salvar esta variante.')
+    else {
+      setFeedback('Variante salva. O rascunho da campanha foi sincronizado.')
+      setEditingVariantId(null)
+      setVariantDraft(null)
+      await load()
     }
+    setBusyId(null)
+  }
 
-    const { data: queueData, error: queueError } = await supabase.rpc('crm_queue_email_campaign', {
-      p_campaign_id: created.campaign_id,
+  async function saveStep(step: Step, nextStatus: Step['status'], delayMinutes: number) {
+    setBusyId(step.id)
+    const { data, error } = await supabase.rpc('admin_update_crm_marketing_step', {
+      p_step_id: step.id,
+      p_name: step.name,
+      p_description: step.description,
+      p_status: nextStatus,
+      p_delay_minutes: delayMinutes,
     })
-    const queued = queueData as { ok?: boolean; queued?: number } | null
-    if (queueError || !queued?.ok) {
-      setFeedback('Campanha criada, mas não foi possível montar a fila de envio.')
-      setSaving(false)
-      void loadCampaigns()
-      return
+    const result = data as { ok?: boolean } | null
+    if (error || !result?.ok) setFeedback('Não foi possível atualizar a etapa.')
+    else {
+      setFeedback('Etapa atualizada.')
+      await load()
     }
-
-    const recipientCount = queued.queued ?? 0
-    if (recipientCount === 0) {
-      setFeedback('Campanha criada, mas este segmento ainda não tem usuários com opt-in de e-mail.')
-      setSaving(false)
-      setForm({ name: '', subject: '', preview: '', segment: 'all_opted_in', content: '' })
-      void loadCampaigns()
-      return
-    }
-
-    const { data: dispatchData, error: dispatchError } = await supabase.functions.invoke('dispatch-crm-emails', {
-      body: { campaignId: created.campaign_id },
-    })
-    const dispatch = dispatchData as DispatchResult | null
-
-    if (dispatchError || !dispatch?.ok) {
-      setFeedback(
-        dispatch?.error === 'resend_not_configured'
-          ? `Campanha com ${recipientCount} destinatários ficou na fila. Falta conectar a chave de envio do Resend no Supabase.`
-          : `Campanha com ${recipientCount} destinatários ficou na fila, mas o envio automático não respondeu.`,
-      )
-    } else {
-      const sent = dispatch.sent ?? 0
-      const failed = dispatch.failed ?? 0
-      setFeedback(
-        failed > 0
-          ? `${sent} e-mails enviados agora; ${failed} tiveram falha e ficaram registrados para tratamento.`
-          : `${sent} e-mails enviados pelo Resend.`,
-      )
-    }
-
-    setForm({ name: '', subject: '', preview: '', segment: 'all_opted_in', content: '' })
-    setSaving(false)
-    void loadCampaigns()
+    setBusyId(null)
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <Link href="/crm" className="text-sm font-medium text-orange-600 hover:underline">← Voltar ao CRM</Link>
-          <h1 className="mt-2 text-3xl font-bold text-neutral-950">E-mail marketing</h1>
-          <p className="mt-1 text-sm text-neutral-600">Campanhas segmentadas usando a mesma classificação do CRM.</p>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">CRM · E-mail marketing</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-950">Funis de relacionamento</h1>
+          <p className="mt-1 max-w-3xl text-sm text-neutral-600">Organize cada jornada por categoria, acompanhe abertura, clique e ativação e edite cada etapa sem sair do Admin.</p>
         </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">Só entram na fila usuários com opt-in de e-mail e sem bloqueio de contato.</div>
-      </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Automações pausadas.</strong> Nenhum disparo acontece até ativarmos as etapas aprovadas.
+        </div>
+      </header>
 
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-950">Nova campanha</h2>
-          <form onSubmit={submit} className="mt-5 grid gap-4">
-            <Field label="Nome interno"><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-11 rounded-xl border border-neutral-300 px-3 outline-none focus:border-orange-500" placeholder="Newsletter setembro" /></Field>
-            <Field label="Segmento"><select value={form.segment} onChange={(e) => setForm({ ...form, segment: e.target.value })} className="h-11 rounded-xl border border-neutral-300 bg-white px-3 outline-none focus:border-orange-500">{segments.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></Field>
-            <Field label="Assunto"><input required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} className="h-11 rounded-xl border border-neutral-300 px-3 outline-none focus:border-orange-500" placeholder="Novos lugares para usar seu +UM" /></Field>
-            <Field label="Preheader"><input value={form.preview} onChange={(e) => setForm({ ...form, preview: e.target.value })} className="h-11 rounded-xl border border-neutral-300 px-3 outline-none focus:border-orange-500" placeholder="Linha curta ao lado do assunto" /></Field>
-            <Field label="Mensagem"><textarea required rows={10} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} className="rounded-xl border border-neutral-300 p-3 leading-6 outline-none focus:border-orange-500" placeholder={'Oi!\n\nTem novidade no +UM...'} /></Field>
-            {feedback ? <p className="rounded-xl bg-neutral-100 p-3 text-sm text-neutral-700">{feedback}</p> : null}
-            <button disabled={saving} className="h-12 rounded-xl bg-orange-600 px-5 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Preparando e enviando...' : 'Criar campanha e enviar'}</button>
-          </form>
-        </section>
-
-        <aside className="rounded-2xl border border-neutral-200 bg-neutral-950 p-5 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-400">Estratégia</p>
-          <h2 className="mt-2 text-xl font-semibold">O e-mail acompanha o momento do usuário.</h2>
-          <div className="mt-5 grid gap-3 text-sm text-neutral-300">
-            <Tip title="Cadastrado">Ensinar o que é o +UM e levar ao primeiro uso.</Tip>
-            <Tip title="Cupom disponível">Dar ideias concretas de onde usar e reduzir fricção.</Tip>
-            <Tip title="Oferta R$47 ativa">Conversão: valor percebido + urgência real das 24h.</Tip>
-            <Tip title="Oferta expirada">Pesquisa, objeções e futura recuperação.</Tip>
-            <Tip title="Assinante">Novos parceiros, pratos e retenção, sem insistir em venda.</Tip>
-          </div>
-        </aside>
-      </div>
-
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-950">Campanhas</h2>
-        <p className="text-sm text-neutral-500">Envios e falhas ficam registrados no CRM.</p>
-        {loading ? <p className="py-10 text-center text-sm text-neutral-500">Carregando campanhas...</p> : campaigns.length === 0 ? <p className="py-10 text-center text-sm text-neutral-500">Nenhuma campanha criada ainda.</p> : (
-          <div className="mt-4 grid gap-3">{campaigns.map((campaign) => (
-            <div key={campaign.id} className="rounded-xl border border-neutral-200 p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-neutral-950">{campaign.name}</p><p className="text-sm text-neutral-500">{campaign.subject}</p></div><span className="w-fit rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">{campaign.status}</span></div>
-              <div className="mt-3 flex flex-wrap gap-4 text-xs text-neutral-500"><span>Segmento: {segments.find((s) => s.value === campaign.segment)?.label ?? campaign.segment}</span><span>{campaign.recipients} destinatários</span><span>{campaign.sent} enviados</span>{campaign.failed ? <span className="text-red-600">{campaign.failed} falharam</span> : null}</div>
-            </div>
-          ))}</div>
-        )}
+      <section className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+        <div className="flex gap-2 overflow-x-auto">
+          {categories.map((category) => (
+            <button key={category} type="button" onClick={() => setActiveCategory(category)} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold ${activeCategory === category ? 'bg-neutral-950 text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}>{category}</button>
+          ))}
+        </div>
       </section>
+
+      {feedback ? <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 shadow-sm">{feedback}</div> : null}
+
+      {loading ? <div className="rounded-2xl border border-neutral-200 bg-white py-16 text-center text-neutral-500">Carregando funis...</div> : visibleFunnels.map((funnel) => (
+        <section key={funnel.id} className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+          <div className="border-b border-neutral-200 bg-neutral-950 p-5 text-white sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-semibold text-orange-300">{funnel.category}</span>
+                  <StatusBadge status={funnel.status} dark />
+                </div>
+                <h2 className="mt-3 text-2xl font-bold">{funnel.name}</h2>
+                <p className="mt-1 max-w-2xl text-sm text-neutral-300">{funnel.description}</p>
+              </div>
+              <div className="text-xs text-neutral-400">Primeiro funil do +UM · aquisição e ativação</div>
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-6">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              <Metric label="Elegíveis" value={funnel.metrics.eligible ?? 0} />
+              <Metric label="Enviados" value={funnel.metrics.email_sent ?? 0} />
+              <Metric label="Aberturas" value={funnel.metrics.opened ?? 0} helper={rate(funnel.metrics.opened, funnel.metrics.email_sent)} />
+              <Metric label="Cliques CTA" value={funnel.metrics.clicked ?? 0} helper={rate(funnel.metrics.clicked, funnel.metrics.email_sent)} />
+              <Metric label="Ativações" value={funnel.metrics.activated ?? 0} helper={rate(funnel.metrics.activated, funnel.metrics.email_sent)} emphasis />
+              <Metric label="Primeiro uso" value={funnel.metrics.first_use ?? 0} helper={rate(funnel.metrics.first_use, funnel.metrics.activated)} />
+            </div>
+
+            <div className="mt-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">Etapas do funil</p>
+              <div className="mt-3 grid gap-4">
+                {funnel.steps.map((step) => (
+                  <StepCard key={step.id} step={step} metrics={step.experiment_key ? experimentMetrics[step.experiment_key] ?? [] : []} busy={busyId === step.id} editingVariantId={editingVariantId} variantDraft={variantDraft} onBeginVariantEdit={beginVariantEdit} onVariantDraftChange={setVariantDraft} onCancelVariantEdit={() => { setEditingVariantId(null); setVariantDraft(null) }} onSaveVariant={saveVariant} onSaveStep={saveStep} busyId={busyId} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ))}
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-1.5 text-sm font-medium text-neutral-700">{label}{children}</label> }
-function Tip({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-xl border border-white/10 bg-white/5 p-3"><strong className="block text-white">{title}</strong><span>{children}</span></div> }
+function StepCard({ step, metrics, busy, editingVariantId, variantDraft, onBeginVariantEdit, onVariantDraftChange, onCancelVariantEdit, onSaveVariant, onSaveStep, busyId }: {
+  step: Step
+  metrics: ExperimentMetric[]
+  busy: boolean
+  editingVariantId: string | null
+  variantDraft: VariantDraft | null
+  onBeginVariantEdit: (variant: Variant) => void
+  onVariantDraftChange: (draft: VariantDraft) => void
+  onCancelVariantEdit: () => void
+  onSaveVariant: (id: string) => Promise<void>
+  onSaveStep: (step: Step, status: Step['status'], delay: number) => Promise<void>
+  busyId: string | null
+}) {
+  const [status, setStatus] = useState<Step['status']>(step.status)
+  const [delay, setDelay] = useState(step.delay_minutes)
 
-function emailHtml(content: string) {
-  const paragraphs = content.split(/\n\s*\n/).map((part) => `<p style="margin:0 0 16px;font-size:16px;line-height:1.65;color:#27231f">${escapeHtml(part).replace(/\n/g, '<br>')}</p>`).join('')
-  return `<!doctype html><html><body style="margin:0;background:#f6f4ef;font-family:Arial,sans-serif"><div style="max-width:600px;margin:0 auto;padding:32px 18px"><div style="font-size:34px;font-weight:800;color:#e55934;margin-bottom:24px">+UM</div><div style="background:#ffffff;border-radius:20px;padding:28px">${paragraphs}<p style="margin:24px 0 0"><a href="https://app.appmaisum.com.br" style="display:inline-block;background:#e55934;color:#fff;text-decoration:none;font-weight:700;padding:14px 20px;border-radius:999px">Abrir o +UM</a></p></div><p style="font-size:12px;line-height:1.5;color:#777;margin:18px 6px 0">Você recebe novidades porque autorizou comunicações do +UM. Você pode alterar suas preferências no seu perfil.</p></div></body></html>`
+  useEffect(() => { setStatus(step.status); setDelay(step.delay_minutes) }, [step.status, step.delay_minutes])
+
+  return (
+    <article className="rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4 sm:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-neutral-950 text-xs font-bold text-white">{step.position}</span>
+            <h3 className="text-lg font-semibold text-neutral-950">{step.name}</h3>
+            <StatusBadge status={step.status} />
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 ring-1 ring-neutral-200">{channelLabel(step.channel)}</span>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm text-neutral-600">{step.description}</p>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="grid gap-1 text-xs font-medium text-neutral-500">Status<select value={status} onChange={(e) => setStatus(e.target.value as Step['status'])} className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-700"><option value="draft">Rascunho</option><option value="active">Ativa</option><option value="paused">Pausada</option><option value="archived">Arquivada</option></select></label>
+          <label className="grid gap-1 text-xs font-medium text-neutral-500">Atraso (min)<input type="number" min={0} value={delay} onChange={(e) => setDelay(Math.max(0, Number(e.target.value) || 0))} className="h-10 w-28 rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-700" /></label>
+          <button type="button" onClick={() => void onSaveStep(step, status, delay)} disabled={busy} className="h-10 rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white disabled:opacity-50">Salvar etapa</button>
+        </div>
+      </div>
+
+      {step.step_key === 'invite_initial' ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <MiniMetric label="Amostra" value={step.metrics.assigned ?? 0} />
+          <MiniMetric label="Enviados" value={step.metrics.sent ?? 0} />
+          <MiniMetric label="Aberturas" value={step.metrics.opened ?? 0} helper={rate(step.metrics.opened, step.metrics.sent)} />
+          <MiniMetric label="Cliques CTA" value={step.metrics.clicked ?? 0} helper={rate(step.metrics.clicked, step.metrics.sent)} />
+          <MiniMetric label="Ativações" value={step.metrics.activated ?? 0} helper={rate(step.metrics.activated, step.metrics.sent)} emphasis />
+        </div>
+      ) : step.metrics.contacts !== undefined ? (
+        <div className="mt-5"><MiniMetric label="Contatos nesta etapa" value={step.metrics.contacts} /></div>
+      ) : null}
+
+      {step.variants.length > 0 ? (
+        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          {step.variants.map((variant) => {
+            const metric = metrics.find((m) => m.variant_key === variant.variant_key)
+            const editing = editingVariantId === variant.id && variantDraft
+            return (
+              <div key={variant.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-orange-600">Variante {variant.variant_key}</p><h4 className="mt-1 text-base font-semibold text-neutral-950">{variant.subject}</h4></div>
+                  <button type="button" onClick={() => onBeginVariantEdit(variant)} className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50">Editar</button>
+                </div>
+
+                {metric ? <div className="mt-4 grid grid-cols-3 gap-2"><Tiny label="Abertura" value={rate(metric.opens, metric.sent)} /><Tiny label="Clique" value={rate(metric.clicks, metric.sent)} /><Tiny label="Ativação" value={rate(metric.activations, metric.sent)} strong /></div> : null}
+
+                {!editing ? <div className="mt-4 space-y-2 text-sm text-neutral-600"><p><strong className="text-neutral-900">Preheader:</strong> {variant.preheader || '—'}</p><p><strong className="text-neutral-900">Headline:</strong> {variant.headline || '—'}</p><p className="whitespace-pre-line line-clamp-6">{variant.body_text}</p><p><strong className="text-neutral-900">CTA:</strong> {variant.cta_label}</p></div> : (
+                  <div className="mt-4 grid gap-3">
+                    <Input label="Assunto" value={variantDraft.subject} onChange={(value) => onVariantDraftChange({ ...variantDraft, subject: value })} />
+                    <Input label="Preheader" value={variantDraft.preheader} onChange={(value) => onVariantDraftChange({ ...variantDraft, preheader: value })} />
+                    <Input label="Headline" value={variantDraft.headline} onChange={(value) => onVariantDraftChange({ ...variantDraft, headline: value })} />
+                    <label className="grid gap-1 text-xs font-medium text-neutral-600">Corpo<textarea rows={12} value={variantDraft.body_text} onChange={(e) => onVariantDraftChange({ ...variantDraft, body_text: e.target.value })} className="rounded-xl border border-neutral-300 p-3 text-sm leading-6 outline-none focus:border-orange-500" /></label>
+                    <Input label="CTA" value={variantDraft.cta_label} onChange={(value) => onVariantDraftChange({ ...variantDraft, cta_label: value })} />
+                    <Input label="Destino" value={variantDraft.cta_path} onChange={(value) => onVariantDraftChange({ ...variantDraft, cta_path: value })} />
+                    <label className="flex items-center gap-2 text-sm text-neutral-700"><input type="checkbox" checked={variantDraft.is_active} onChange={(e) => onVariantDraftChange({ ...variantDraft, is_active: e.target.checked })} /> Variante ativa no teste</label>
+                    <div className="flex gap-2"><button type="button" onClick={() => void onSaveVariant(variant.id)} disabled={busyId === variant.id} className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Salvar variante</button><button type="button" onClick={onCancelVariantEdit} className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700">Cancelar</button></div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : <div className="mt-4 rounded-xl border border-dashed border-neutral-300 bg-white p-4 text-sm text-neutral-500">Copy ainda não definida para esta etapa. Ela permanece pausada até ser construída e aprovada.</div>}
+    </article>
+  )
 }
-function escapeHtml(value: string) { return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;') }
+
+function Metric({ label, value, helper, emphasis = false }: { label: string; value: number; helper?: string; emphasis?: boolean }) { return <div className={`rounded-2xl border p-4 ${emphasis ? 'border-orange-200 bg-orange-50' : 'border-neutral-200 bg-white'}`}><p className="text-xs font-medium text-neutral-500">{label}</p><p className={`mt-1 text-3xl font-bold ${emphasis ? 'text-orange-700' : 'text-neutral-950'}`}>{value}</p>{helper ? <p className="mt-1 text-xs text-neutral-400">{helper}</p> : null}</div> }
+function MiniMetric({ label, value, helper, emphasis = false }: { label: string; value: number; helper?: string; emphasis?: boolean }) { return <div className={`rounded-xl border px-3 py-2.5 ${emphasis ? 'border-orange-200 bg-orange-50' : 'border-neutral-200 bg-white'}`}><p className="text-[11px] font-medium text-neutral-500">{label}</p><p className={`mt-0.5 text-xl font-bold ${emphasis ? 'text-orange-700' : 'text-neutral-950'}`}>{value}</p>{helper ? <p className="text-[11px] text-neutral-400">{helper}</p> : null}</div> }
+function Tiny({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className={`rounded-xl px-2 py-2 text-center ${strong ? 'bg-orange-50' : 'bg-neutral-50'}`}><p className="text-[10px] text-neutral-500">{label}</p><p className={`mt-0.5 text-sm font-bold ${strong ? 'text-orange-700' : 'text-neutral-900'}`}>{value}</p></div> }
+function Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="grid gap-1 text-xs font-medium text-neutral-600">{label}<input value={value} onChange={(e) => onChange(e.target.value)} className="h-10 rounded-xl border border-neutral-300 px-3 text-sm outline-none focus:border-orange-500" /></label> }
+function StatusBadge({ status, dark = false }: { status: string; dark?: boolean }) { const map: Record<string, string> = { active: dark ? 'bg-emerald-400/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700', paused: dark ? 'bg-amber-400/15 text-amber-300' : 'bg-amber-50 text-amber-700', draft: dark ? 'bg-white/10 text-neutral-300' : 'bg-neutral-100 text-neutral-600', archived: dark ? 'bg-white/10 text-neutral-400' : 'bg-neutral-100 text-neutral-500' }; const label: Record<string, string> = { active: 'Ativa', paused: 'Pausada', draft: 'Rascunho', archived: 'Arquivada' }; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${map[status] ?? map.draft}`}>{label[status] ?? status}</span> }
+function rate(num?: number, den?: number) { if (!den) return '0%'; return `${((Number(num ?? 0) / den) * 100).toFixed(1).replace('.', ',')}%` }
+function channelLabel(channel: Step['channel']) { return channel === 'email' ? 'E-mail' : channel === 'whatsapp' ? 'WhatsApp' : 'Sistema' }
