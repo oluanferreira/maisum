@@ -1,26 +1,43 @@
-import type { Metadata } from 'next'
-import { Plus_Jakarta_Sans, Inter } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google'
 import './globals.css'
 
-const plusJakarta = Plus_Jakarta_Sans({
+const geistSans = Geist({
+  variable: '--font-geist-sans',
   subsets: ['latin'],
-  variable: '--font-heading',
+  weight: ['300', '400', '500', '600', '700', '800'],
+  display: 'swap',
 })
 
-const inter = Inter({
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
   subsets: ['latin'],
-  variable: '--font-body',
+  weight: ['400', '500'],
+  display: 'swap',
+})
+
+const instrumentSerif = Instrument_Serif({
+  variable: '--font-instrument-serif',
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: '+um — Admin',
-  description: 'Painel administrativo do +um',
+  title: '+UM — Admin',
+  description: 'Operação e relacionamento do +UM',
+}
+
+export const viewport: Viewport = {
+  themeColor: '#141008',
+  colorScheme: 'dark',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${plusJakarta.variable} ${inter.variable}`}>
-      <body className="font-body antialiased">{children}</body>
+    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}>
+      <body className="antialiased">{children}</body>
     </html>
   )
 }
