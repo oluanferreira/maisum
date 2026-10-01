@@ -55,3 +55,4 @@ Thumbs.db
 .lmas/install-log.txt
 
 .vercel
+.env*.local
