@@ -20,7 +20,7 @@
 - [x] Teste SQL de liberação anual, adição e expiração de cupom administrativo passou em rollback.
 - [x] Lint e typecheck do monorepo passaram; verificações do admin repetidas após mudanças TS e passaram.
 - [x] npm test executado: comando encerrou com sucesso, mas o monorepo não tem tarefas de teste configuradas. Teste funcional foi a regressão SQL descrita acima.
-- [ ] Build remoto/publicação das alterações TS do admin em andamento.
+- [x] Build remoto passou e deployment dpl_DVKQzu5EWderAiBUggoPGQLNzvei foi promovido para admin.appmaisum.com.br. Login retornou HTTP 200; arquivos públicos usam o Supabase novo, sem referência ao antigo.
 
 ## Dados reais após rollback
 
