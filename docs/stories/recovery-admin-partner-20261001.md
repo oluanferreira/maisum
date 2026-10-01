@@ -13,7 +13,8 @@
 - [x] Edição normal do endereço permanece permitida.
 - [x] Métricas usam pagamentos reais e vigência do acesso, sem preços antigos fixos.
 - [x] Teste SQL executado no projeto novo dentro de BEGIN/ROLLBACK; nenhum fixture persistiu.
-- [ ] Conferir listas e botões no navegador com login de super_admin (sessão solicitada).
+- [x] Sessão real de super_admin: dashboard confere com o banco; 41 restaurantes carregados; fila pendente vazia; usuários mostram 408 registros, segunda página 101–200 e filtro Super admin com 1 registro. Aprovar/rejeitar foi testado na regressão SQL em rollback, sem alterar restaurantes reais no navegador.
+- [x] Ranking Mais usados calcula os usos de todos os parceiros ativos antes de selecionar os cinco primeiros; limite antecipado removido.
 - [x] Paginação de usuários e busca no banco substituem limite silencioso de 100 contas.
 - [x] Liberação anual manual usa somente os campos atuais do banco; referência AbacatePay removida.
 - [x] Fallback para Supabase antigo removido do admin; produção, prévia e desenvolvimento configurados no projeto novo.

@@ -59,7 +59,7 @@ export default function DashboardPage() {
     if (error) console.error('Erro ao carregar metricas:', error)
     else if (data) setMetrics(data as AdminMetrics)
 
-    let restQuery = supabase.from('restaurants').select('id, name, cities(name)').eq('is_active', true).limit(5)
+    let restQuery = supabase.from('restaurants').select('id, name, cities(name)').eq('is_active', true)
     if (cityFilter) restQuery = restQuery.eq('city_id', cityFilter)
     const { data: restaurants } = await restQuery
 
@@ -74,7 +74,7 @@ export default function DashboardPage() {
         name: r.name,
         city_name: r.cities?.name || '—',
         coupons_count: countMap[r.id] || 0,
-      })).sort((a, b) => b.coupons_count - a.coupons_count))
+      })).sort((a, b) => b.coupons_count - a.coupons_count || a.name.localeCompare(b.name)).slice(0, 5))
     } else setTopRestaurants([])
 
     const thirtyDaysAgo = new Date()
