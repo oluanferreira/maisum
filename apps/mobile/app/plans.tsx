@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { supabase } from '@/services/supabase'
 
-type PlanType = 'monthly' | 'annual'
+type PlanType = 'annual'
 
 export default function PlansScreen() {
   const router = useRouter()
@@ -79,14 +79,11 @@ export default function PlansScreen() {
               <Text style={styles.badgeText}>Melhor Valor</Text>
             </View>
             <Text style={styles.cardTitle}>Anual</Text>
-            <Text style={styles.cardPrice}>R$ 89,90</Text>
+            <Text style={styles.cardPrice}>R$ 199,90</Text>
             <Text style={styles.cardPeriod}>/ano</Text>
             <View style={styles.divider} />
-            <Text style={styles.cardBenefit}>100 cupons por ano</Text>
-            <Text style={styles.cardDetail}>R$ 0,90 por cupom</Text>
-            <View style={styles.savingsBadge}>
-              <Text style={styles.savingsText}>Economize 45%</Text>
-            </View>
+            <Text style={styles.cardBenefit}>Acesso anual ilimitado ao +UM</Text>
+            <Text style={styles.cardDetail}>Nos estabelecimentos participantes</Text>
             <TouchableOpacity
               style={[styles.cta, styles.ctaPrimary]}
               onPress={() => handleSelectPlan('annual')}
@@ -98,34 +95,12 @@ export default function PlansScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
 
-          {/* Monthly Card */}
-          <TouchableOpacity
-            style={[styles.card, styles.cardMonthly]}
-            activeOpacity={0.7}
-            onPress={() => handleSelectPlan('monthly')}
-            disabled={isLoading}
-          >
-            <Text style={styles.cardTitle}>Mensal</Text>
-            <Text style={styles.cardPrice}>R$ 14,90</Text>
-            <Text style={styles.cardPeriod}>/mes</Text>
-            <View style={styles.divider} />
-            <Text style={styles.cardBenefit}>10 cupons por mes</Text>
-            <Text style={styles.cardDetail}>R$ 1,49 por cupom</Text>
-            <TouchableOpacity
-              style={[styles.cta, styles.ctaSecondary]}
-              onPress={() => handleSelectPlan('monthly')}
-              disabled={isLoading}
-            >
-              <Text style={styles.ctaSecondaryText}>
-                {isLoading && selectedPlan === 'monthly' ? 'Carregando...' : 'Assinar Mensal'}
-              </Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
+          
         </View>
 
         {/* Fine print */}
         <Text style={styles.finePrint}>
-          Cancele quando quiser. Cupons nao acumulam entre meses.
+          Aproveite os benefícios durante a vigência anual, conforme as regras de cada estabelecimento.
         </Text>
 
         {/* Payment methods */}
@@ -310,3 +285,4 @@ const styles = StyleSheet.create({
     color: '#4B5563',
   },
 })
+

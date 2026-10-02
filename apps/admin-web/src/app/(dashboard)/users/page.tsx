@@ -40,11 +40,16 @@ const roleLabel: Record<string, string> = {
   super_admin: 'Super Admin',
 }
 
+const PAGE_SIZE = 100
+
 export default function UsersPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [roleFilter, setRoleFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const [listError, setListError] = useState('')
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [coupons, setCoupons] = useState<Coupon[]>([])
@@ -56,28 +61,38 @@ export default function UsersPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    loadProfiles()
-  }, [roleFilter])
+    const controller = new AbortController()
+    void loadProfiles(controller.signal)
+    return () => controller.abort()
+  }, [roleFilter, search, page])
 
-  async function loadProfiles() {
+  async function loadProfiles(signal: AbortSignal) {
     setLoading(true)
+    setListError('')
 
     let query = supabase
       .from('profiles')
-      .select('id, full_name, role, created_at')
+      .select('id, full_name, role, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(100)
+      .order('id', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+      .abortSignal(signal)
 
     if (roleFilter) {
       query = query.eq('role', roleFilter)
     }
 
-    const { data, error } = await query
+    if (search.trim()) query = query.ilike('full_name', `%${search.trim()}%`)
+
+    const { data, count, error } = await query
+    if (signal.aborted) return
 
     if (error) {
       console.error('Erro ao carregar usuarios:', error)
+      setListError('Não foi possível carregar os usuários. Atualize a página para tentar novamente.')
     } else {
       setProfiles(data || [])
+      setTotalCount(count || 0)
     }
 
     setLoading(false)
@@ -130,7 +145,6 @@ export default function UsersPage() {
       provider: 'manual',
       access_source: 'manual',
       provider_subscription_id: manualId,
-      abacatepay_subscription_id: manualId,
       current_period_start: now.toISOString(),
       current_period_end: oneYearFromNow.toISOString(),
     }
@@ -203,9 +217,8 @@ export default function UsersPage() {
     setActionLoading(null)
   }
 
-  const filteredProfiles = profiles.filter((profile) =>
-    profile.full_name?.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')),
-  )
+  const filteredProfiles = profiles
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const availableCoupons = coupons.filter((coupon) => coupon.status === 'available').length
   const adminCoupons = coupons.filter((coupon) => coupon.status === 'available' && coupon.source === 'admin').length
 
@@ -219,13 +232,13 @@ export default function UsersPage() {
         <div className="flex gap-3">
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
             placeholder="Buscar por nome"
             className="h-10 w-48 rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
           />
           <select
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => { setRoleFilter(e.target.value); setPage(0) }}
             className="h-10 rounded-lg border border-neutral-300 px-3 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
           >
             <option value="">Todos os perfis</option>
@@ -236,7 +249,9 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {loading ? (
+      {listError ? (
+        <div role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{listError}</div>
+      ) : loading ? (
         <div className="py-12 text-center text-neutral-500">Carregando usuários...</div>
       ) : filteredProfiles.length === 0 ? (
         <div className="py-12 text-center text-neutral-500">Nenhum usuário encontrado</div>
@@ -279,6 +294,19 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && !listError && totalCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-neutral-600">
+            Mostrando {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} de {totalCount} usuários
+          </p>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page === 0} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-40">Anterior</button>
+            <span className="text-sm">{page + 1} / {totalPages}</span>
+            <button onClick={() => setPage((value) => value + 1)} disabled={page + 1 >= totalPages} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-40">Próximo</button>
+          </div>
         </div>
       )}
 
