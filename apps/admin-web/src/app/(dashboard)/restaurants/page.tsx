@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { maskBrazilWhatsapp, normalizeBrazilWhatsapp } from '@maisum/shared'
 import { createClient } from '@/lib/supabase/client'
 
 interface City {
@@ -18,11 +19,37 @@ interface Restaurant {
   name: string
   is_active: boolean
   partner_status: PartnerStatus
+  whatsapp: string | null
   created_at: string
   cities: { name: string } | null
 }
 
 const PAGE_SIZE = 20
+
+function getWhatsappLink(value: string | null): { href: string; label: string } | null {
+  const input = value?.trim() || ''
+  if (!/^\+?[\d\s().-]+$/.test(input)) return null
+
+  const digits = input.replace(/\D/g, '')
+  const isInternational = (digits.length === 12 || digits.length === 13) && digits.startsWith('55')
+  if (!isInternational && (input.startsWith('+') || (digits.length !== 10 && digits.length !== 11))) return null
+
+  const national = isInternational ? digits.slice(2) : digits
+  try {
+    if (national.length === 10) {
+      const ddd = national.slice(0, 2)
+      const subscriber = national.slice(2)
+      // Reuse the mobile validator for the DDD only; keep the business landline unchanged.
+      if (!/^[2-5]\d{7}$/.test(subscriber) || !normalizeBrazilWhatsapp(`${ddd}9${subscriber}`)) return null
+      return { href: `https://wa.me/55${national}`, label: `(${ddd}) ${subscriber.slice(0, 4)}-${subscriber.slice(4)}` }
+    }
+    const normalized = normalizeBrazilWhatsapp(national)
+    if (!normalized) return null
+    return { href: `https://wa.me/${normalized.slice(1)}`, label: maskBrazilWhatsapp(national) }
+  } catch {
+    return null
+  }
+}
 
 export default function RestaurantsPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
@@ -268,7 +295,7 @@ export default function RestaurantsPage() {
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50">
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Nome</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Cidade</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">WhatsApp</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Data</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">Ações</th>
@@ -286,6 +313,7 @@ export default function RestaurantsPage() {
             ) : (
               restaurants.map((restaurant) => {
                 const badge = statusBadge(restaurant)
+                const whatsapp = getWhatsappLink(restaurant.whatsapp)
                 const processing = processingId === restaurant.id
                 const needsApproval = restaurant.partner_status === 'pending' || restaurant.partner_status === 'rejected'
 
@@ -299,7 +327,21 @@ export default function RestaurantsPage() {
                         {restaurant.name}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-sm text-neutral-600">{restaurant.cities?.name || '—'}</td>
+                    <td className="px-6 py-4 text-sm text-neutral-600">
+                      {whatsapp ? (
+                        <a
+                          href={whatsapp.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Abrir WhatsApp de ${restaurant.name} (${whatsapp.label})`}
+                          className="whitespace-nowrap font-medium text-green-700 underline underline-offset-2 hover:text-green-900"
+                        >
+                          {whatsapp.label}
+                        </a>
+                      ) : (
+                        <span aria-label="Sem WhatsApp válido">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${badge.className}`}>
                         {badge.label}
